@@ -3,6 +3,7 @@
 int main(void){
     uint32_t p = P_MERSENNE;
     printf("p : %u\n",p);
+    printf("α : "); fp4_printf(&alpha);
 
     fp4_t A, B, C, D, E, F, One, Zero;
     fp16_t A16, B16, C16, D16, E16, One16, Beta16, Alpha16, inv16, res16;
