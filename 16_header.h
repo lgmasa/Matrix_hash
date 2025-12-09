@@ -64,6 +64,7 @@ int fp4_x4_minus_irreducible(const fp4_t *alpha); // x^4 - alpha が既約なら
 void fp4_order(mpz_t order, const fp4_t *X); // 乗法位数（0 の場合は0を返す）
 int fp4_is_zero_vec(const fp4_t *X);
 int fp4_is_scalar(const fp4_t *X);
+void fp4_mul_slow(fp4_t *S, const fp4_t *X, const fp4_t *Y); // CVMAなしの素朴乗算
 
 //既約多項式に用いる元α
 extern const fp4_t alpha;
@@ -84,14 +85,19 @@ int fp16_is_equal(const fp16_t *A, const fp16_t *B);
 void fp16_add(fp16_t *S, const fp16_t *X, const fp16_t *Y);
 void fp16_sub(fp16_t *S, const fp16_t *X, const fp16_t *Y);
 void fp16_mul(fp16_t *S, const fp16_t *X, const fp16_t *Y);
+void fp16_mul_slow(fp16_t *S, const fp16_t *X, const fp16_t *Y);
 void fp16_sqr(fp16_t *S, const fp16_t *X);
 void fp16_mul_sparse(fp16_t *S, const fp16_t *X, const fp4_t *Y); // fp4倍
 void fp16_pow(fp16_t *S, const fp16_t *X, const mpz_t exp);
 void fp16_inv(fp16_t *S, const fp16_t *X);
+void fp16_inv_slow(fp16_t *S, const fp16_t *X);
 int fp16_is_scalar(const fp16_t *X);
 
 //get time
 long bench_fp4_mul(int iters);
+long bench_fp4_mul_slow(int iters);
 long bench_fp16_inv(int iters);
+long bench_fp16_inv_slow(int iters);
+extern uint64_t fp_mul_count;
 
 #endif

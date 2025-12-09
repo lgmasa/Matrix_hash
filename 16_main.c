@@ -250,15 +250,17 @@ int main(void){
 
     // --- Benchmark fp4_mul ---
     int iters = 1000000;
-    long ns = bench_fp4_mul(iters);
-    printf("[Bench] fp4_mul: %d iters -> %ld ns (%.2f ns/op)\n",
-        iters, ns, (double)ns / iters);
+    bench_fp4_mul(iters); // 詳細は関数内で表示
+
+    // --- Benchmark fp4_mul_slow ---
+    bench_fp4_mul_slow(iters); // 詳細は関数内で表示
 
     // --- Benchmark fp16_inv ---
     int inv_iters = 10000;
-    long ns_inv = bench_fp16_inv(inv_iters);
-    printf("[Bench] fp16_inv: %d iters -> %ld ns (%.2f ns/op)\n",
-        inv_iters, ns_inv, (double)ns_inv / inv_iters);
+    bench_fp16_inv(inv_iters); // 詳細は関数内で表示
+
+    // --- Benchmark fp16_inv_slow ---
+    bench_fp16_inv_slow(inv_iters); // 詳細は関数内で表示
 
     return 0;
 }

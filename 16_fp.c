@@ -1,5 +1,7 @@
 #include "16_header.h"
 
+uint64_t fp_mul_count = 0; // 乗算回数カウンタ
+
 // 64bitの計算結果を 31bit (mod p) に落とし込む関数
 static inline uint32_t reduce_mersenne(uint64_t x) {
     // 上位31bitと下位31bitを足す
@@ -97,6 +99,7 @@ void fp_sub(fp_t *S, const fp_t *X, const fp_t *Y){
 
 // 積 S = X * Y
 void fp_mul(fp_t *S, const fp_t *X, const fp_t *Y){
+    fp_mul_count++;
     // 64bitで掛け算してから、31bitに落とす
     uint64_t prod = (uint64_t)X->x0 * (uint64_t)Y->x0;
     S->x0 = reduce_mersenne(prod);

@@ -143,6 +143,62 @@ void fp4_sqr(fp4_t *S, const fp4_t *X){
     fp4_mul(S, X, X);
 }
 
+// CVMAを使わない素朴乗算（基底 e_i*e_j の積を前計算し、学校式で16項展開）
+void fp4_mul_slow(fp4_t *S, const fp4_t *X, const fp4_t *Y){
+    // 前計算テーブルを1度だけ構築
+    static int ready = 0;
+    static fp4_t tbl[4][4];
+    if (!ready){
+        fp4_t ei, ej;
+        fp4_init(&ei); fp4_init(&ej);
+        fp4_t prod;
+        fp4_init(&prod);
+        for(int i=0;i<4;i++){
+            for(int j=0;j<4;j++){
+                // ei, ej を単位ベクトルにセット
+                fp4_set_ui(&ei, 0); fp4_set_ui(&ej, 0);
+                (&ei.x0)[i].x0 = 1; // x0,x1,x2,x3 の並びに直接セット
+                (&ej.x0)[j].x0 = 1;
+                fp4_mul(&prod, &ei, &ej); // 高速版を使用して積を取得
+                fp4_set(&tbl[i][j], &prod);
+            }
+        }
+        fp4_clear(&ei); fp4_clear(&ej); fp4_clear(&prod);
+        ready = 1;
+    }
+
+    // S を 0 に初期化
+    fp4_set_ui(S, 0);
+
+    // 学校式: Σ_{i,j} X_i Y_j * tbl[i][j]
+    fp4_t tmp, accum;
+    fp4_init(&tmp); fp4_init(&accum);
+    for(int i=0;i<4;i++){
+        for(int j=0;j<4;j++){
+            // tmp = tbl[i][j] * (X_i * Y_j)  (スカラー倍)
+            fp_mul(&tmp.x0, &tbl[i][j].x0, &(&X->x0)[i]);
+            fp_mul(&tmp.x1, &tbl[i][j].x1, &(&X->x0)[i]);
+            fp_mul(&tmp.x2, &tbl[i][j].x2, &(&X->x0)[i]);
+            fp_mul(&tmp.x3, &tbl[i][j].x3, &(&X->x0)[i]);
+            // さらに Y_j を掛ける
+            fp_mul(&tmp.x0, &tmp.x0, &(&Y->x0)[j]);
+            fp_mul(&tmp.x1, &tmp.x1, &(&Y->x0)[j]);
+            fp_mul(&tmp.x2, &tmp.x2, &(&Y->x0)[j]);
+            fp_mul(&tmp.x3, &tmp.x3, &(&Y->x0)[j]);
+            // S += tmp
+            fp_add(&accum.x0, &S->x0, &tmp.x0);
+            fp_add(&accum.x1, &S->x1, &tmp.x1);
+            fp_add(&accum.x2, &S->x2, &tmp.x2);
+            fp_add(&accum.x3, &S->x3, &tmp.x3);
+            fp_set(&S->x0, &accum.x0);
+            fp_set(&S->x1, &accum.x1);
+            fp_set(&S->x2, &accum.x2);
+            fp_set(&S->x3, &accum.x3);
+        }
+    }
+    fp4_clear(&tmp); fp4_clear(&accum);
+}
+
 // 逆元 S = 1/X
 // X^(-1) = (X^p * X^(p^2) * X^(p^3)) / Norm(X)
 void fp4_inv(fp4_t *S, const fp4_t *X){
