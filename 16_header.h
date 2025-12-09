@@ -56,11 +56,14 @@ void fp4_sqr(fp4_t *S, const fp4_t *X);
 void fp4_frobenius_map(fp4_t *S, const fp4_t *X); // p乗写像 (高速)
 void fp4_inv(fp4_t *S, const fp4_t *X);
 void fp4_pow(fp4_t *S, const fp4_t *X, const mpz_t exp);
+void fp4_neg(fp4_t *S, const fp4_t *X);
 int fp4_has_4th_root(const fp4_t *X); // x^{(p^4-1)/4} == 1 をチェック
 void fp4_quartic_residue_scan(int trials); // ランダム試行で4乗非剰余を探す
 int fp4_is_square(const fp4_t *X); // x^{(p^4-1)/2} == 1 をチェック
 int fp4_x4_minus_irreducible(const fp4_t *alpha); // x^4 - alpha が既約なら1
 void fp4_order(mpz_t order, const fp4_t *X); // 乗法位数（0 の場合は0を返す）
+int fp4_is_zero_vec(const fp4_t *X);
+int fp4_is_scalar(const fp4_t *X);
 
 //既約多項式に用いる元α
 extern const fp4_t alpha;
@@ -83,6 +86,12 @@ void fp16_sub(fp16_t *S, const fp16_t *X, const fp16_t *Y);
 void fp16_mul(fp16_t *S, const fp16_t *X, const fp16_t *Y);
 void fp16_sqr(fp16_t *S, const fp16_t *X);
 void fp16_mul_sparse(fp16_t *S, const fp16_t *X, const fp4_t *Y); // fp4倍
+void fp16_pow(fp16_t *S, const fp16_t *X, const mpz_t exp);
 void fp16_inv(fp16_t *S, const fp16_t *X);
+int fp16_is_scalar(const fp16_t *X);
+
+//get time
+long bench_fp4_mul(int iters);
+long bench_fp16_inv(int iters);
 
 #endif

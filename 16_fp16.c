@@ -143,17 +143,11 @@ void fp16_inv(fp16_t *S, const fp16_t *X){
     // x1, x3 は符号反転
     fp4_t tmp_neg;
     // -x1
-    fp_neg(&tmp_neg.x0, &X->x1.x0); // ※もしfp4_negがあればそれを使う
-    fp_neg(&tmp_neg.x1, &X->x1.x1);
-    fp_neg(&tmp_neg.x2, &X->x1.x2);
-    fp_neg(&tmp_neg.x3, &X->x1.x3); // 簡易的な実装（fp4_neg関数がないため）
+    fp4_neg(&tmp_neg, &X->x1); // ※もしfp4_negがあればそれを使う
     fp4_set(&X_conj.x1, &tmp_neg);
     
     // -x3
-    fp_neg(&tmp_neg.x0, &X->x3.x0);
-    fp_neg(&tmp_neg.x1, &X->x3.x1);
-    fp_neg(&tmp_neg.x2, &X->x3.x2);
-    fp_neg(&tmp_neg.x3, &X->x3.x3);
+    fp4_neg(&tmp_neg, &X->x3);
     fp4_set(&X_conj.x3, &tmp_neg);
 
     // 2. 部分ノルム M = X * X'
@@ -165,17 +159,14 @@ void fp16_inv(fp16_t *S, const fp16_t *X){
     fp16_set(&M_conj, &M);
     
     // -M.x2
-    fp_neg(&tmp_neg.x0, &M.x2.x0);
-    fp_neg(&tmp_neg.x1, &M.x2.x1);
-    fp_neg(&tmp_neg.x2, &M.x2.x2);
-    fp_neg(&tmp_neg.x3, &M.x2.x3);
+    fp4_neg(&tmp_neg, &M.x2);
     fp4_set(&M_conj.x2, &tmp_neg);
 
     // 4. 全体ノルム N = M * M'
     // 結果はスカラ (x0成分のみ) になる
     fp16_mul(&T, &M, &M_conj);
 
-    printf("Norm = "); fp16_printf(&T);
+    //printf("Norm = "); fp16_printf(&T);
 
     // 5. ノルムの逆数 norm_inv = 1 / T.x0
     fp4_inv(&norm_inv, &T.x0);
@@ -183,4 +174,32 @@ void fp16_inv(fp16_t *S, const fp16_t *X){
     // 6. 結果 S = X' * M' * norm_inv
     fp16_mul(&T, &X_conj, &M_conj);
     fp16_mul_sparse(S, &T, &norm_inv); // スカラ倍
+}
+
+// 繰り返し2乗法によるべき乗
+void fp16_pow(fp16_t *S, const fp16_t *X, const mpz_t exp){
+    fp16_t result, base;
+    // result = 1
+    fp4_set_ui(&result.x0, 1);
+    fp4_set_ui(&result.x1, 0);
+    fp4_set_ui(&result.x2, 0);
+    fp4_set_ui(&result.x3, 0);
+
+    fp16_set(&base, X);
+
+    size_t bit_len = mpz_sizeinbase(exp, 2);
+    for (size_t i = 0; i < bit_len; i++) {
+        if (mpz_tstbit(exp, i)) {
+            fp16_mul(&result, &result, &base);
+        }
+        fp16_sqr(&base, &base);
+    }
+    fp16_set(S, &result);
+}
+
+int fp16_is_scalar(const fp16_t *X){
+    return fp4_is_scalar(&X->x0) &&
+           fp4_is_zero_vec(&X->x1) &&
+           fp4_is_zero_vec(&X->x2) &&
+           fp4_is_zero_vec(&X->x3);
 }

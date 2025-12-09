@@ -6,13 +6,14 @@ int main(void){
     printf("α : "); fp4_printf(&alpha);
 
     fp4_t A, B, C, D, E, F, One, Zero;
-    fp16_t A16, B16, C16, D16, E16, One16, Beta16, Alpha16, inv16, res16;
+    fp16_t A16, B16, C16, D16, E16, One16, Beta16, Alpha16, inv16, res16, A16_saved;
     fp4_init(&A); fp4_init(&B); fp4_init(&C);
     fp4_init(&D); fp4_init(&E); fp4_init(&F);
     fp4_init(&One); fp4_init(&Zero);
     fp16_init(&A16); fp16_init(&B16); fp16_init(&C16);
     fp16_init(&D16); fp16_init(&E16); fp16_init(&One16);
     fp16_init(&Beta16); fp16_init(&Alpha16); fp16_init(&inv16); fp16_init(&res16);
+    fp16_init(&A16_saved);
 
     // テストデータをランダムに生成
     fp4_random(&A);
@@ -155,6 +156,20 @@ int main(void){
     gmp_printf("ord(alpha)/2^33 = %Zd, rem = %Zd\n", r, two_pow);
     mpz_clears(ord_alpha, two_pow, r, group_alpha, NULL);
 
+    // 10. スカラーのべき乗結果がスカラーかチェック
+    printf("[Test 10] Scalar pow keeps scalar (fp4) ... ");
+    mpz_t scalar_exp4;
+    mpz_init_set_ui(scalar_exp4, 12345);
+    fp4_set_ui(&A, 7); // スカラーをセット
+    fp4_pow(&D, &A, scalar_exp4);
+    if (fp4_is_scalar(&D)) {
+        printf("OK\n");
+    } else {
+        printf("NG\n");
+        printf("Result: "); fp4_printf(&D);
+    }
+    mpz_clear(scalar_exp4);
+
     // //8. 4乗非剰余を探索しつつ x^4 - alpha の既約性も表示
     // printf("[Test 8] Search 4th-nonresidue (100 trials) with irreducibility check...\n");
     // fp4_quartic_residue_scan(100);
@@ -209,12 +224,41 @@ int main(void){
     printf("[fp16 Test 6] beta^4 == alpha ... ");
     if (fp16_is_equal(&D16, &Alpha16)) printf("OK\n"); else { printf("NG\n"); printf("beta^4 = "); fp16_printf(&D16); }
 
+    // 7. スカラーのべき乗結果がスカラーかチェック
+    printf("[fp16 Test 7] Scalar pow keeps scalar (fp16) ... ");
+    mpz_t scalar_exp16;
+    mpz_init_set_ui(scalar_exp16, 12345);
+    fp16_set(&A16_saved, &A16); // 元のランダム値を保存
+    fp4_set_ui(&A16.x0, 5); // Fp4 スカラー
+    fp4_set_ui(&A16.x1, 0); fp4_set_ui(&A16.x2, 0); fp4_set_ui(&A16.x3, 0);
+    fp16_pow(&D16, &A16, scalar_exp16);
+    if (fp16_is_scalar(&D16)) {
+        printf("OK\n");
+    } else {
+        printf("NG\n");
+        printf("Result: "); fp16_printf(&D16);
+    }
+    mpz_clear(scalar_exp16);
+    fp16_set(&A16, &A16_saved); // 以降のテスト用に元に戻す
+
     fp16_inv(&inv16,&A16);
     printf("1/A16 = "); fp16_printf(&inv16);
 
     fp16_mul(&res16,&A16,&inv16);
 
     printf("A16*1/A16 = "); fp16_printf(&res16);
+
+    // --- Benchmark fp4_mul ---
+    int iters = 1000000;
+    long ns = bench_fp4_mul(iters);
+    printf("[Bench] fp4_mul: %d iters -> %ld ns (%.2f ns/op)\n",
+        iters, ns, (double)ns / iters);
+
+    // --- Benchmark fp16_inv ---
+    int inv_iters = 10000;
+    long ns_inv = bench_fp16_inv(inv_iters);
+    printf("[Bench] fp16_inv: %d iters -> %ld ns (%.2f ns/op)\n",
+        inv_iters, ns_inv, (double)ns_inv / inv_iters);
 
     return 0;
 }

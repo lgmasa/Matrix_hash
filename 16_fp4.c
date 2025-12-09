@@ -71,6 +71,13 @@ void fp4_sub(fp4_t *S, const fp4_t *X, const fp4_t *Y){
     fp_sub(&S->x3, &X->x3, &Y->x3);
 }
 
+void fp4_neg(fp4_t *S, const fp4_t *X){
+    fp_neg(&S->x0, &X->x0);
+    fp_neg(&S->x1, &X->x1);
+    fp_neg(&S->x2, &X->x2);
+    fp_neg(&S->x3, &X->x3);
+}
+
 void fp4_frobenius_map(fp4_t *S, const fp4_t *X){
     fp_t tmp;
     fp_init(&tmp);
@@ -89,58 +96,46 @@ void fp4_frobenius_map(fp4_t *S, const fp4_t *X){
 // 乗算 (Type I ONB, CVMA: 10乗算で全係数を生成)
 // 基底: γ, γ^2, γ^4, γ^3（Frobeniusで巡回）
 void fp4_mul(fp4_t *S, const fp4_t *X, const fp4_t *Y){
-    // 対角 4 個
-    fp_t d0,d1,d2,d3;
-    fp_mul(&d0, &X->x0, &Y->x0);
-    fp_mul(&d1, &X->x1, &Y->x1);
-    fp_mul(&d2, &X->x2, &Y->x2);
-    fp_mul(&d3, &X->x3, &Y->x3);
+    // Algorithm 2 (Type-I CVMA, h=1) を m=4, 基底 {γ,γ^2,γ^4,γ^3} に展開した形。
+    // σ 写像は (i,j)→{ (0,1)->3, (0,2)->4, (0,3)->2, (1,2)->0, (1,3)->4, (2,3)->1 }。
+    fp_t v[5], dx, dy, t;
 
-    // 交差 6 個 (a_i+a_j)(b_i+b_j) - d_i - d_j
-    fp_t c01,c02,c03,c12,c13,c23;
-    fp_t sa,sb,prod;
+    // 対角項 v0..v3
+    fp_mul(&v[0], &X->x0, &Y->x0);
+    fp_mul(&v[1], &X->x1, &Y->x1);
+    fp_mul(&v[2], &X->x2, &Y->x2);
+    fp_mul(&v[3], &X->x3, &Y->x3);
+    v[4].x0 = 0; // v_m
 
-    fp_add(&sa, &X->x0, &X->x1); fp_add(&sb, &Y->x0, &Y->x1);
-    fp_mul(&prod, &sa, &sb); fp_sub(&prod, &prod, &d0); fp_sub(&prod, &prod, &d1); fp_set(&c01, &prod);
+    // (0,1) -> σ=3
+    fp_sub(&dx, &X->x0, &X->x1); fp_sub(&dy, &Y->x0, &Y->x1);
+    fp_mul(&t, &dx, &dy); fp_add(&v[3], &v[3], &t);
 
-    fp_add(&sa, &X->x0, &X->x2); fp_add(&sb, &Y->x0, &Y->x2);
-    fp_mul(&prod, &sa, &sb); fp_sub(&prod, &prod, &d0); fp_sub(&prod, &prod, &d2); fp_set(&c02, &prod);
+    // (0,2) -> σ=4
+    fp_sub(&dx, &X->x0, &X->x2); fp_sub(&dy, &Y->x0, &Y->x2);
+    fp_mul(&t, &dx, &dy); fp_add(&v[4], &v[4], &t);
 
-    fp_add(&sa, &X->x0, &X->x3); fp_add(&sb, &Y->x0, &Y->x3);
-    fp_mul(&prod, &sa, &sb); fp_sub(&prod, &prod, &d0); fp_sub(&prod, &prod, &d3); fp_set(&c03, &prod);
+    // (0,3) -> σ=2
+    fp_sub(&dx, &X->x0, &X->x3); fp_sub(&dy, &Y->x0, &Y->x3);
+    fp_mul(&t, &dx, &dy); fp_add(&v[2], &v[2], &t);
 
-    fp_add(&sa, &X->x1, &X->x2); fp_add(&sb, &Y->x1, &Y->x2);
-    fp_mul(&prod, &sa, &sb); fp_sub(&prod, &prod, &d1); fp_sub(&prod, &prod, &d2); fp_set(&c12, &prod);
+    // (1,2) -> σ=0
+    fp_sub(&dx, &X->x1, &X->x2); fp_sub(&dy, &Y->x1, &Y->x2);
+    fp_mul(&t, &dx, &dy); fp_add(&v[0], &v[0], &t);
 
-    fp_add(&sa, &X->x1, &X->x3); fp_add(&sb, &Y->x1, &Y->x3);
-    fp_mul(&prod, &sa, &sb); fp_sub(&prod, &prod, &d1); fp_sub(&prod, &prod, &d3); fp_set(&c13, &prod);
+    // (1,3) -> σ=4
+    fp_sub(&dx, &X->x1, &X->x3); fp_sub(&dy, &Y->x1, &Y->x3);
+    fp_mul(&t, &dx, &dy); fp_add(&v[4], &v[4], &t);
 
-    fp_add(&sa, &X->x2, &X->x3); fp_add(&sb, &Y->x2, &Y->x3);
-    fp_mul(&prod, &sa, &sb); fp_sub(&prod, &prod, &d2); fp_sub(&prod, &prod, &d3); fp_set(&c23, &prod);
+    // (2,3) -> σ=1
+    fp_sub(&dx, &X->x2, &X->x3); fp_sub(&dy, &Y->x2, &Y->x3);
+    fp_mul(&t, &dx, &dy); fp_add(&v[1], &v[1], &t);
 
-    // 出力組み立て（係数は線形結合で固定：求解済み）
-    fp_t o0,o1,o2,o3;
-    // x0 (γ): d3 - c02 + c12 - c13
-    fp_sub(&o0, &d3, &c02);
-    fp_add(&o0, &o0, &c12);
-    fp_sub(&o0, &o0, &c13);
-    // x1 (γ^2): d0 - c02 - c13 + c23
-    fp_sub(&o1, &d0, &c02);
-    fp_sub(&o1, &o1, &c13);
-    fp_add(&o1, &o1, &c23);
-    // x2 (γ^4): d1 - c02 + c03 - c13
-    fp_sub(&o2, &d1, &c02);
-    fp_add(&o2, &o2, &c03);
-    fp_sub(&o2, &o2, &c13);
-    // x3 (γ^3): d2 + c01 - c02 - c13
-    fp_sub(&o3, &d2, &c02);
-    fp_add(&o3, &o3, &c01);
-    fp_sub(&o3, &o3, &c13);
-
-    fp_set(&S->x0, &o0);
-    fp_set(&S->x1, &o1);
-    fp_set(&S->x2, &o2);
-    fp_set(&S->x3, &o3);
+    // z_l = v_m - v_l
+    fp_sub(&S->x0, &v[4], &v[0]);
+    fp_sub(&S->x1, &v[4], &v[1]);
+    fp_sub(&S->x2, &v[4], &v[2]);
+    fp_sub(&S->x3, &v[4], &v[3]);
 }
 // 2乗 (実装簡略化のため mul を呼び出す)
 // ※ 正規基底では S = X^(2^k) は高速だが、S = X^2 は乗算と同じコストがかかる
@@ -365,4 +360,15 @@ void fp4_order(mpz_t order, const fp4_t *X){
     mpz_clear(p);
     mpz_clear(ord);
     mpz_clear(exp);
+}
+
+int fp4_is_scalar(const fp4_t *X){
+    return fp_is_equal(&X->x0, &X->x1) &&
+           fp_is_equal(&X->x0, &X->x2) &&
+           fp_is_equal(&X->x0, &X->x3);
+}
+
+int fp4_is_zero_vec(const fp4_t *X){
+    return fp_is_zero(&X->x0) && fp_is_zero(&X->x1) &&
+           fp_is_zero(&X->x2) && fp_is_zero(&X->x3);
 }
