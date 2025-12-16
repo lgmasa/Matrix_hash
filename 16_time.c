@@ -107,7 +107,7 @@ long bench_fp4_mul_slow(int iters){
     struct timespec st, ed;
     clock_gettime(CLOCK_MONOTONIC, &st);
     for(int i=0;i<iters;i++){
-        fp4_mul_slow(&acc, &acc, &a);
+        fp4_mul_slow2(&acc, &acc, &a);
     }
     clock_gettime(CLOCK_MONOTONIC, &ed);
     uint64_t after = fp_mul_count;

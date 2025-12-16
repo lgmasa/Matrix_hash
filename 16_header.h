@@ -65,6 +65,7 @@ void fp4_order(mpz_t order, const fp4_t *X); // 乗法位数（0 の場合は0�
 int fp4_is_zero_vec(const fp4_t *X);
 int fp4_is_scalar(const fp4_t *X);
 void fp4_mul_slow(fp4_t *S, const fp4_t *X, const fp4_t *Y); // CVMAなしの素朴乗算
+void fp4_mul_slow2(fp4_t *S, const fp4_t *X, const fp4_t *Y);
 
 //既約多項式に用いる元α
 extern const fp4_t alpha;

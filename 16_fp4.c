@@ -171,33 +171,80 @@ void fp4_mul_slow(fp4_t *S, const fp4_t *X, const fp4_t *Y){
     fp4_set_ui(S, 0);
 
     // 学校式: Σ_{i,j} X_i Y_j * tbl[i][j]
-    fp4_t tmp, accum;
-    fp4_init(&tmp); fp4_init(&accum);
+    fp4_t tmp;
+    fp_t xy;
+    fp4_init(&tmp); fp_init(&xy);
     for(int i=0;i<4;i++){
         for(int j=0;j<4;j++){
-            // tmp = tbl[i][j] * (X_i * Y_j)  (スカラー倍)
-            fp_mul(&tmp.x0, &tbl[i][j].x0, &(&X->x0)[i]);
-            fp_mul(&tmp.x1, &tbl[i][j].x1, &(&X->x0)[i]);
-            fp_mul(&tmp.x2, &tbl[i][j].x2, &(&X->x0)[i]);
-            fp_mul(&tmp.x3, &tbl[i][j].x3, &(&X->x0)[i]);
-            // さらに Y_j を掛ける
-            fp_mul(&tmp.x0, &tmp.x0, &(&Y->x0)[j]);
-            fp_mul(&tmp.x1, &tmp.x1, &(&Y->x0)[j]);
-            fp_mul(&tmp.x2, &tmp.x2, &(&Y->x0)[j]);
-            fp_mul(&tmp.x3, &tmp.x3, &(&Y->x0)[j]);
+            // 係数 c = X_i * Y_j を先に求め、tbl[i][j] を一括スカラー倍
+            fp_mul(&xy, &(&X->x0)[i], &(&Y->x0)[j]); // 1 mul
+            fp_mul(&tmp.x0, &tbl[i][j].x0, &xy);
+            fp_mul(&tmp.x1, &tbl[i][j].x1, &xy);
+            fp_mul(&tmp.x2, &tbl[i][j].x2, &xy);
+            fp_mul(&tmp.x3, &tbl[i][j].x3, &xy);
             // S += tmp
-            fp_add(&accum.x0, &S->x0, &tmp.x0);
-            fp_add(&accum.x1, &S->x1, &tmp.x1);
-            fp_add(&accum.x2, &S->x2, &tmp.x2);
-            fp_add(&accum.x3, &S->x3, &tmp.x3);
-            fp_set(&S->x0, &accum.x0);
-            fp_set(&S->x1, &accum.x1);
-            fp_set(&S->x2, &accum.x2);
-            fp_set(&S->x3, &accum.x3);
+            fp_add(&S->x0, &S->x0, &tmp.x0);
+            fp_add(&S->x1, &S->x1, &tmp.x1);
+            fp_add(&S->x2, &S->x2, &tmp.x2);
+            fp_add(&S->x3, &S->x3, &tmp.x3);
         }
     }
-    fp4_clear(&tmp); fp4_clear(&accum);
+    fp4_clear(&tmp); fp_clear(&xy);
 }
+
+void fp4_mul_slow2(fp4_t *S, const fp4_t *X, const fp4_t *Y){
+    fp_t v[16];
+    for(int i=0;i<16;i++){
+        fp_init(&v[i]);
+    }
+    fp_t c0, c1, c2, c3, con;
+    fp_init(&c0); fp_init(&c1); fp_init(&c2); fp_init(&c3); fp_init(&con);
+
+    fp_mul(&v[0],&X->x0,&Y->x0);
+    fp_mul(&v[1],&X->x0,&Y->x1);
+    fp_mul(&v[2],&X->x0,&Y->x2);
+    fp_mul(&v[3],&X->x0,&Y->x3);
+    fp_mul(&v[4],&X->x1,&Y->x0);
+    fp_mul(&v[5],&X->x1,&Y->x1);
+    fp_mul(&v[6],&X->x1,&Y->x2);
+    fp_mul(&v[7],&X->x1,&Y->x3);
+    fp_mul(&v[8],&X->x2,&Y->x0);
+    fp_mul(&v[9],&X->x2,&Y->x1);
+    fp_mul(&v[10],&X->x2,&Y->x2);
+    fp_mul(&v[11],&X->x2,&Y->x3);
+    fp_mul(&v[12],&X->x3,&Y->x0);
+    fp_mul(&v[13],&X->x3,&Y->x1);
+    fp_mul(&v[14],&X->x3,&Y->x2);
+    fp_mul(&v[15],&X->x3,&Y->x3);
+
+    // γ^5 = -(γ+γ^2+γ^3+γ^4) に起因する「引き算する束」
+    fp_add(&con,&v[2],&v[8]);   // x0y2 + x2y0
+    fp_add(&con,&con,&v[7]);    // + x1y3
+    fp_add(&con,&con,&v[13]);   // + x3y1
+
+    // 各成分: 正の寄与を足してから con を引く
+    fp_add(&c0,&v[6],&v[9]);    // x1y2 + x2y1
+    fp_add(&c0,&c0,&v[15]);     // + x3y3
+    fp_sub(&c0,&c0,&con);       // - (x0y2 + x1y3 + x2y0 + x3y1)
+
+    fp_add(&c1,&v[0],&v[11]);   // x0y0 + x2y3
+    fp_add(&c1,&c1,&v[14]);     // + x3y2
+    fp_sub(&c1,&c1,&con);
+
+    fp_add(&c2,&v[3],&v[5]);    // x0y3 + x1y1
+    fp_add(&c2,&c2,&v[12]);     // + x3y0
+    fp_sub(&c2,&c2,&con);
+
+    fp_add(&c3,&v[1],&v[4]);    // x0y1 + x1y0
+    fp_add(&c3,&c3,&v[10]);     // + x2y2
+    fp_sub(&c3,&c3,&con);
+
+    fp_set(&S->x0,&c0);
+    fp_set(&S->x1,&c1);
+    fp_set(&S->x2,&c2);
+    fp_set(&S->x3,&c3);
+}
+
 
 // 逆元 S = 1/X
 // X^(-1) = (X^p * X^(p^2) * X^(p^3)) / Norm(X)

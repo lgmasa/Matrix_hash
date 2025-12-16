@@ -130,43 +130,43 @@ void fp16_mul_slow(fp16_t *S, const fp16_t *X, const fp16_t *Y){
     // 愚直な展開 (Karatsubaを使えばもっと速くなるが、まずは確実性重視)
     
     // t0 (定数項): x0*y0
-    fp4_mul_slow(&t0, &X->x0, &Y->x0);
+    fp4_mul_slow2(&t0, &X->x0, &Y->x0);
     
     // t4 (4次の項): x1*y3 + x2*y2 + x3*y1
     // これに ALPHA を掛けて t0 に足す (y^4 = ALPHA)
-    fp4_mul_slow(&tmp, &X->x1, &Y->x3); fp4_mul_slow(&t4, &X->x2, &Y->x2); fp4_add(&t4, &t4, &tmp);
-    fp4_mul_slow(&tmp, &X->x3, &Y->x1); fp4_add(&t4, &t4, &tmp);
-    fp4_mul_slow(&t4, &t4, &alpha);
+    fp4_mul_slow2(&tmp, &X->x1, &Y->x3); fp4_mul_slow2(&t4, &X->x2, &Y->x2); fp4_add(&t4, &t4, &tmp);
+    fp4_mul_slow2(&tmp, &X->x3, &Y->x1); fp4_add(&t4, &t4, &tmp);
+    fp4_mul_slow2(&t4, &t4, &alpha);
     fp4_add(&t0, &t0, &t4);
 
     // t1 (1次の項): x0*y1 + x1*y0
-    fp4_mul_slow(&t1, &X->x0, &Y->x1);
-    fp4_mul_slow(&tmp, &X->x1, &Y->x0); fp4_add(&t1, &t1, &tmp);
+    fp4_mul_slow2(&t1, &X->x0, &Y->x1);
+    fp4_mul_slow2(&tmp, &X->x1, &Y->x0); fp4_add(&t1, &t1, &tmp);
 
     // t5 (5次の項): x2*y3 + x3*y2
     // これに ALPHA を掛けて t1 に足す (y^5 = ALPHA * y)
-    fp4_mul_slow(&t5, &X->x2, &Y->x3);
-    fp4_mul_slow(&tmp, &X->x3, &Y->x2); fp4_add(&t5, &t5, &tmp);
-    fp4_mul_slow(&t5, &t5, &alpha);
+    fp4_mul_slow2(&t5, &X->x2, &Y->x3);
+    fp4_mul_slow2(&tmp, &X->x3, &Y->x2); fp4_add(&t5, &t5, &tmp);
+    fp4_mul_slow2(&t5, &t5, &alpha);
     fp4_add(&t1, &t1, &t5);
 
     // t2 (2次の項): x0*y2 + x1*y1 + x2*y0
-    fp4_mul_slow(&t2, &X->x0, &Y->x2);
-    fp4_mul_slow(&tmp, &X->x1, &Y->x1); fp4_add(&t2, &t2, &tmp);
-    fp4_mul_slow(&tmp, &X->x2, &Y->x0); fp4_add(&t2, &t2, &tmp);
+    fp4_mul_slow2(&t2, &X->x0, &Y->x2);
+    fp4_mul_slow2(&tmp, &X->x1, &Y->x1); fp4_add(&t2, &t2, &tmp);
+    fp4_mul_slow2(&tmp, &X->x2, &Y->x0); fp4_add(&t2, &t2, &tmp);
 
     // t6 (6次の項): x3*y3
     // これに ALPHA を掛けて t2 に足す (y^6 = ALPHA * y^2)
-    fp4_mul_slow(&t6, &X->x3, &Y->x3);
-    fp4_mul_slow(&t6, &t6, &alpha);
+    fp4_mul_slow2(&t6, &X->x3, &Y->x3);
+    fp4_mul_slow2(&t6, &t6, &alpha);
     fp4_add(&t2, &t2, &t6);
 
     // t3 (3次の項): x0*y3 + x1*y2 + x2*y1 + x3*y0
     // 7次以上の項はないので、これはそのまま
-    fp4_mul_slow(&t3, &X->x0, &Y->x3);
-    fp4_mul_slow(&tmp, &X->x1, &Y->x2); fp4_add(&t3, &t3, &tmp);
-    fp4_mul_slow(&tmp, &X->x2, &Y->x1); fp4_add(&t3, &t3, &tmp);
-    fp4_mul_slow(&tmp, &X->x3, &Y->x0); fp4_add(&t3, &t3, &tmp);
+    fp4_mul_slow2(&t3, &X->x0, &Y->x3);
+    fp4_mul_slow2(&tmp, &X->x1, &Y->x2); fp4_add(&t3, &t3, &tmp);
+    fp4_mul_slow2(&tmp, &X->x2, &Y->x1); fp4_add(&t3, &t3, &tmp);
+    fp4_mul_slow2(&tmp, &X->x3, &Y->x0); fp4_add(&t3, &t3, &tmp);
 
     // 結果格納
     fp16_set(S, (fp16_t*)&t0); // 構造体のレイアウトが同じならキャストも可だが、
