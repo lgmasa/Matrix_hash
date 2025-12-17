@@ -71,6 +71,13 @@ void fp16_mul_sparse(fp16_t *S, const fp16_t *X, const fp4_t *Y){
     fp4_mul(&S->x3, &X->x3, Y);
 }
 
+void fp16_mul_sparse_slow(fp16_t *S, const fp16_t *X, const fp4_t *Y){
+    fp4_mul_slow2(&S->x0, &X->x0, Y);
+    fp4_mul_slow2(&S->x1, &X->x1, Y);
+    fp4_mul_slow2(&S->x2, &X->x2, Y);
+    fp4_mul_slow2(&S->x3, &X->x3, Y);
+}
+
 // 乗算
 // S = A * B mod (y^4 - ALPHA)
 void fp16_mul(fp16_t *S, const fp16_t *X, const fp16_t *Y){
@@ -265,11 +272,11 @@ void fp16_inv_slow(fp16_t *S, const fp16_t *X){
     //printf("Norm = "); fp16_printf(&T);
 
     // 5. ノルムの逆数 norm_inv = 1 / T.x0
-    fp4_inv(&norm_inv, &T.x0);
+    fp4_inv_slow(&norm_inv, &T.x0);
 
     // 6. 結果 S = X' * M' * norm_inv
     fp16_mul_slow(&T, &X_conj, &M_conj);
-    fp16_mul_sparse(S, &T, &norm_inv); // スカラ倍
+    fp16_mul_sparse_slow(S, &T, &norm_inv); // スカラ倍
 }
 
 // 繰り返し2乗法によるべき乗

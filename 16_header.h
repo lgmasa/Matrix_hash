@@ -52,10 +52,13 @@ int fp4_is_equal(const fp4_t *A, const fp4_t *B); //一致していれば1、不
 void fp4_add(fp4_t *S, const fp4_t *X, const fp4_t *Y);
 void fp4_sub(fp4_t *S, const fp4_t *X, const fp4_t *Y);
 void fp4_mul(fp4_t *S, const fp4_t *X, const fp4_t *Y);
+extern uint64_t fp4_mul_count;
+extern uint64_t fp4_mul_slow2_count;
 void fp4_sqr(fp4_t *S, const fp4_t *X);
 void fp4_frobenius_map(fp4_t *S, const fp4_t *X); // p乗写像 (高速)
-void fp4_inv(fp4_t *S, const fp4_t *X);
 void fp4_pow(fp4_t *S, const fp4_t *X, const mpz_t exp);
+void fp4_inv(fp4_t *S, const fp4_t *X); // p^4-2 乗による単純な逆元
+void fp4_inv_slow(fp4_t *S, const fp4_t *X);
 void fp4_neg(fp4_t *S, const fp4_t *X);
 int fp4_has_4th_root(const fp4_t *X); // x^{(p^4-1)/4} == 1 をチェック
 void fp4_quartic_residue_scan(int trials); // ランダム試行で4乗非剰余を探す
@@ -89,6 +92,7 @@ void fp16_mul(fp16_t *S, const fp16_t *X, const fp16_t *Y);
 void fp16_mul_slow(fp16_t *S, const fp16_t *X, const fp16_t *Y);
 void fp16_sqr(fp16_t *S, const fp16_t *X);
 void fp16_mul_sparse(fp16_t *S, const fp16_t *X, const fp4_t *Y); // fp4倍
+void fp16_mul_sparse_slow(fp16_t *S, const fp16_t *X, const fp4_t *Y);
 void fp16_pow(fp16_t *S, const fp16_t *X, const mpz_t exp);
 void fp16_inv(fp16_t *S, const fp16_t *X);
 void fp16_inv_slow(fp16_t *S, const fp16_t *X);

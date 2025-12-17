@@ -1,5 +1,8 @@
 #include "16_header.h"
 
+uint64_t fp4_mul_count = 0; // fp4 乗算回数カウンタ
+uint64_t fp4_mul_slow2_count = 0; // fp4 素朴乗算（slow2）の呼び出し回数
+
 void fp4_init(fp4_t *X){
     fp_init(&X->x0);
     fp_init(&X->x1);
@@ -96,6 +99,7 @@ void fp4_frobenius_map(fp4_t *S, const fp4_t *X){
 // 乗算 (Type I ONB, CVMA: 10乗算で全係数を生成)
 // 基底: γ, γ^2, γ^4, γ^3（Frobeniusで巡回）
 void fp4_mul(fp4_t *S, const fp4_t *X, const fp4_t *Y){
+    fp4_mul_count++;
     // Algorithm 2 (Type-I CVMA, h=1) を m=4, 基底 {γ,γ^2,γ^4,γ^3} に展開した形。
     // σ 写像は (i,j)→{ (0,1)->3, (0,2)->4, (0,3)->2, (1,2)->0, (1,3)->4, (2,3)->1 }。
     fp_t v[5], dx, dy, t;
@@ -193,13 +197,11 @@ void fp4_mul_slow(fp4_t *S, const fp4_t *X, const fp4_t *Y){
 }
 
 void fp4_mul_slow2(fp4_t *S, const fp4_t *X, const fp4_t *Y){
+    fp4_mul_slow2_count++;
     fp_t v[16];
     for(int i=0;i<16;i++){
         fp_init(&v[i]);
     }
-    fp_t c0, c1, c2, c3, con;
-    fp_init(&c0); fp_init(&c1); fp_init(&c2); fp_init(&c3); fp_init(&con);
-
     fp_mul(&v[0],&X->x0,&Y->x0);
     fp_mul(&v[1],&X->x0,&Y->x1);
     fp_mul(&v[2],&X->x0,&Y->x2);
@@ -217,34 +219,45 @@ void fp4_mul_slow2(fp4_t *S, const fp4_t *X, const fp4_t *Y){
     fp_mul(&v[14],&X->x3,&Y->x2);
     fp_mul(&v[15],&X->x3,&Y->x3);
 
-    // γ^5 = -(γ+γ^2+γ^3+γ^4) に起因する「引き算する束」
-    fp_add(&con,&v[2],&v[8]);   // x0y2 + x2y0
-    fp_add(&con,&con,&v[7]);    // + x1y3
-    fp_add(&con,&con,&v[13]);   // + x3y1
+    fp_t con;
+    fp_init(&con);
+    fp_add(&con,&v[2],&v[8]);
+    fp_add(&con,&con,&v[7]);
+    fp_add(&con,&con,&v[13]);
 
-    // 各成分: 正の寄与を足してから con を引く
-    fp_add(&c0,&v[6],&v[9]);    // x1y2 + x2y1
-    fp_add(&c0,&c0,&v[15]);     // + x3y3
-    fp_sub(&c0,&c0,&con);       // - (x0y2 + x1y3 + x2y0 + x3y1)
-
-    fp_add(&c1,&v[0],&v[11]);   // x0y0 + x2y3
-    fp_add(&c1,&c1,&v[14]);     // + x3y2
-    fp_sub(&c1,&c1,&con);
-
-    fp_add(&c2,&v[3],&v[5]);    // x0y3 + x1y1
-    fp_add(&c2,&c2,&v[12]);     // + x3y0
-    fp_sub(&c2,&c2,&con);
-
-    fp_add(&c3,&v[1],&v[4]);    // x0y1 + x1y0
-    fp_add(&c3,&c3,&v[10]);     // + x2y2
-    fp_sub(&c3,&c3,&con);
-
-    fp_set(&S->x0,&c0);
-    fp_set(&S->x1,&c1);
-    fp_set(&S->x2,&c2);
-    fp_set(&S->x3,&c3);
+    //c0
+    fp_add(&S->x0,&v[6],&v[10]);
+    fp_add(&S->x0,&S->x0,&v[15]);
+    fp_sub(&S->x0,&S->x0,&con);
+    //c1
+    fp_add(&S->x1,&v[0],&v[11]);
+    fp_add(&S->x1,&S->x0,&v[14]);
+    fp_sub(&S->x1,&S->x0,&con);
+    //c2
+    fp_add(&S->x2,&v[3],&v[5]);
+    fp_add(&S->x2,&S->x0,&v[12]);
+    fp_sub(&S->x2,&S->x0,&con);
+    //c3
+    fp_add(&S->x3,&v[1],&v[4]);
+    fp_add(&S->x3,&S->x0,&v[10]);
+    fp_sub(&S->x3,&S->x0,&con);
 }
 
+// 繰り返し2乗法によるべき乗
+void fp4_pow(fp4_t *S, const fp4_t *X, const mpz_t exp){
+    fp4_t result, base;
+    fp4_set_ui(&result, 1);
+    fp4_set(&base, X);
+
+    size_t bit_len = mpz_sizeinbase(exp, 2);
+    for (size_t i = 0; i < bit_len; i++) {
+        if (mpz_tstbit(exp, i)) {
+            fp4_mul(&result, &result, &base);
+        }
+        fp4_sqr(&base, &base);
+    }
+    fp4_set(S, &result);
+}
 
 // 逆元 S = 1/X
 // X^(-1) = (X^p * X^(p^2) * X^(p^3)) / Norm(X)
@@ -302,21 +315,62 @@ void fp4_inv(fp4_t *S, const fp4_t *X){
     fp4_mul(S, &numerator, &norm);
 }
 
-// 繰り返し2乗法によるべき乗
-void fp4_pow(fp4_t *S, const fp4_t *X, const mpz_t exp){
-    fp4_t result, base;
-    fp4_set_ui(&result, 1);
-    fp4_set(&base, X);
+// 逆元 S = 1/X
+// X^(-1) = (X^p * X^(p^2) * X^(p^3)) / Norm(X)
+void fp4_inv_slow(fp4_t *S, const fp4_t *X){
+    fp4_t t1, t2, numerator, norm;
+    // 変数の初期化は構造体定義によるが、今回は代入で上書きされるので不要
+    
+    // 1. t1 = X^p
+    fp4_frobenius_map(&t1, X);
+    
+    // 2. t2 = X * X^p  (= X^(1+p))
+    fp4_mul_slow2(&t2, X, &t1);
+    
+    // 3. t1 = X^(p^2)
+    fp4_frobenius_map(&t1, &t1); // (X^p)^p
+    
+    // 4. numerator = (X * X^p) * X^(p^2)  (= X^(1+p+p^2))
+    // これが逆元の分子の元（X^p * X^p^2 * X^p^3）に近い形
+    fp4_mul_slow2(&numerator, &t2, &t1);
+    
+    // 5. t1 = X^(p^3)
+    fp4_frobenius_map(&t1, &t1); // (X^p^2)^p
+    
+    // 6. norm = numerator * X^(p^3)  (= X^(1+p+p^2+p^3))
+    // これがノルム。正規基底ではスカラ値となる。
+    fp4_mul_slow2(&norm, &numerator, &t1);
+    
+    // 7. 分子の仕上げ: numerator を p乗する
+    // 現在 numerator = X^(1+p+p^2) なので、
+    // p乗すると X^(p+p^2+p^3) となり、求めたかった「自分以外の積」になる
+    fp4_frobenius_map(&numerator, &numerator);
 
-    size_t bit_len = mpz_sizeinbase(exp, 2);
-    for (size_t i = 0; i < bit_len; i++) {
-        if (mpz_tstbit(exp, i)) {
-            fp4_mul(&result, &result, &base);
-        }
-        fp4_sqr(&base, &base);
+    // 8. ノルムの逆数計算 (Fp上での計算)
+    // ノルムはスカラなので、正規基底表現では全係数が同じ値になっているはず。
+    // x0 成分だけ取り出して Fp 上で逆元を取ればよい。
+    
+    if (fp_is_zero(&norm.x0)) {
+        // 0の逆元はないので 0 を返す（またはエラー処理）
+        fp4_set_ui(S, 0);
+        return;
     }
-    fp4_set(S, &result);
+    
+    // d = norm.x0 とすると、このベクトルは整数 -d を表している。
+    // 欲しいのは (-d)^(-1) を表すベクトル。
+    // (-d)^(-1) = -(d^(-1)) なので、係数は d^(-1) になる。
+    // つまり、単に係数の逆数を取って、全成分にセットすればよい。
+    fp_inv(&norm.x0, &norm.x0); // x0 = x0^(-1)
+    
+    // 求めた逆数を全成分にセットして、スカラ倍用のベクトルを作る
+    fp_set(&norm.x1, &norm.x0);
+    fp_set(&norm.x2, &norm.x0);
+    fp_set(&norm.x3, &norm.x0);
+    
+    // 9. 最後に分子とノルムの逆数を掛ける
+    fp4_mul_slow2(S, &numerator, &norm);
 }
+
 
 // quartic residue 判定: x^{(p^4-1)/4} = 1 なら4乗根が存在
 int fp4_has_4th_root(const fp4_t *X){

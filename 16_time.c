@@ -11,6 +11,7 @@ long bench_fp16_inv(int iters){
 
     volatile uint32_t sink = 0; // 最適化抑止用
     uint64_t before = fp_mul_count;
+    uint64_t before_fp4 = fp4_mul_count;
     struct timespec st, ed;
     clock_gettime(CLOCK_MONOTONIC, &st);
     for(int i=0;i<iters;i++){
@@ -19,12 +20,15 @@ long bench_fp16_inv(int iters){
     }
     clock_gettime(CLOCK_MONOTONIC, &ed);
     uint64_t after = fp_mul_count;
+    uint64_t after_fp4 = fp4_mul_count;
     long ns = (ed.tv_sec - st.tv_sec) * 1000000000L + (ed.tv_nsec - st.tv_nsec);
     uint64_t muls = after - before;
+    uint64_t muls_fp4 = after_fp4 - before_fp4;
 
-    printf("[Bench] fp16_inv: %d iters -> %ld ns (%.2f ns/op), muls: %llu total, %.2f per op\n",
+    printf("[Bench] fp16_inv: %d iters -> %ld ns (%.2f ns/op), muls: %llu total, %.2f per op, fp4_mul calls: %llu total, %.2f per op\n",
         iters, ns, (double)ns / iters,
-        (unsigned long long)muls, (double)muls / iters);
+        (unsigned long long)muls, (double)muls / iters,
+        (unsigned long long)muls_fp4, (double)muls_fp4 / iters);
 
     if (sink == 0xFFFFFFFF) { // 実際は起きないが最適化を抑止
         fp16_set(&a, &inv);
@@ -44,6 +48,8 @@ long bench_fp16_inv_slow(int iters){
 
     volatile uint32_t sink = 0; // 最適化抑止用
     uint64_t before = fp_mul_count;
+    uint64_t before_fp4 = fp4_mul_count;
+    uint64_t before_fp4_slow2 = fp4_mul_slow2_count;
     struct timespec st, ed;
     clock_gettime(CLOCK_MONOTONIC, &st);
     for(int i=0;i<iters;i++){
@@ -52,12 +58,18 @@ long bench_fp16_inv_slow(int iters){
     }
     clock_gettime(CLOCK_MONOTONIC, &ed);
     uint64_t after = fp_mul_count;
+    uint64_t after_fp4 = fp4_mul_count;
+    uint64_t after_fp4_slow2 = fp4_mul_slow2_count;
     long ns = (ed.tv_sec - st.tv_sec) * 1000000000L + (ed.tv_nsec - st.tv_nsec);
     uint64_t muls = after - before;
+    uint64_t muls_fp4 = after_fp4 - before_fp4;
+    uint64_t muls_fp4_slow2 = after_fp4_slow2 - before_fp4_slow2;
 
-    printf("[Bench] fp16_inv_slow: %d iters -> %ld ns (%.2f ns/op), muls: %llu total, %.2f per op\n",
+    printf("[Bench] fp16_inv_slow: %d iters -> %ld ns (%.2f ns/op), muls: %llu total, %.2f per op, fp4_mul calls: %llu total, %.2f per op, fp4_mul_slow2 calls: %llu total, %.2f per op\n",
         iters, ns, (double)ns / iters,
-        (unsigned long long)muls, (double)muls / iters);
+        (unsigned long long)muls, (double)muls / iters,
+        (unsigned long long)muls_fp4, (double)muls_fp4 / iters,
+        (unsigned long long)muls_fp4_slow2, (double)muls_fp4_slow2 / iters);
 
     if (sink == 0xFFFFFFFF) { // 実際は起きないが最適化を抑止
         fp16_set(&a, &inv);
