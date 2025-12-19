@@ -1,7 +1,8 @@
 #include "16_header.h"
 
 uint64_t fp4_mul_count = 0; // fp4 乗算回数カウンタ
-uint64_t fp4_mul_slow2_count = 0; // fp4 素朴乗算（slow2）の呼び出し回数
+uint64_t fp4_mul_karatsuba_count = 0; // Karatsuba 版乗算の呼び出し回数
+uint64_t fp4_mul_slow_count = 0; // fp4 素朴乗算（slow）の呼び出し回数
 
 void fp4_init(fp4_t *X){
     fp_init(&X->x0);
@@ -141,63 +142,9 @@ void fp4_mul(fp4_t *S, const fp4_t *X, const fp4_t *Y){
     fp_sub(&S->x2, &v[4], &v[2]);
     fp_sub(&S->x3, &v[4], &v[3]);
 }
-// 2乗 (実装簡略化のため mul を呼び出す)
-// ※ 正規基底では S = X^(2^k) は高速だが、S = X^2 は乗算と同じコストがかかる
-void fp4_sqr(fp4_t *S, const fp4_t *X){
-    fp4_mul(S, X, X);
-}
 
-// CVMAを使わない素朴乗算（基底 e_i*e_j の積を前計算し、学校式で16項展開）
 void fp4_mul_slow(fp4_t *S, const fp4_t *X, const fp4_t *Y){
-    // 前計算テーブルを1度だけ構築
-    static int ready = 0;
-    static fp4_t tbl[4][4];
-    if (!ready){
-        fp4_t ei, ej;
-        fp4_init(&ei); fp4_init(&ej);
-        fp4_t prod;
-        fp4_init(&prod);
-        for(int i=0;i<4;i++){
-            for(int j=0;j<4;j++){
-                // ei, ej を単位ベクトルにセット
-                fp4_set_ui(&ei, 0); fp4_set_ui(&ej, 0);
-                (&ei.x0)[i].x0 = 1; // x0,x1,x2,x3 の並びに直接セット
-                (&ej.x0)[j].x0 = 1;
-                fp4_mul(&prod, &ei, &ej); // 高速版を使用して積を取得
-                fp4_set(&tbl[i][j], &prod);
-            }
-        }
-        fp4_clear(&ei); fp4_clear(&ej); fp4_clear(&prod);
-        ready = 1;
-    }
-
-    // S を 0 に初期化
-    fp4_set_ui(S, 0);
-
-    // 学校式: Σ_{i,j} X_i Y_j * tbl[i][j]
-    fp4_t tmp;
-    fp_t xy;
-    fp4_init(&tmp); fp_init(&xy);
-    for(int i=0;i<4;i++){
-        for(int j=0;j<4;j++){
-            // 係数 c = X_i * Y_j を先に求め、tbl[i][j] を一括スカラー倍
-            fp_mul(&xy, &(&X->x0)[i], &(&Y->x0)[j]); // 1 mul
-            fp_mul(&tmp.x0, &tbl[i][j].x0, &xy);
-            fp_mul(&tmp.x1, &tbl[i][j].x1, &xy);
-            fp_mul(&tmp.x2, &tbl[i][j].x2, &xy);
-            fp_mul(&tmp.x3, &tbl[i][j].x3, &xy);
-            // S += tmp
-            fp_add(&S->x0, &S->x0, &tmp.x0);
-            fp_add(&S->x1, &S->x1, &tmp.x1);
-            fp_add(&S->x2, &S->x2, &tmp.x2);
-            fp_add(&S->x3, &S->x3, &tmp.x3);
-        }
-    }
-    fp4_clear(&tmp); fp_clear(&xy);
-}
-
-void fp4_mul_slow2(fp4_t *S, const fp4_t *X, const fp4_t *Y){
-    fp4_mul_slow2_count++;
+    fp4_mul_slow_count++;
     fp_t v[16];
     for(int i=0;i<16;i++){
         fp_init(&v[i]);
@@ -241,6 +188,98 @@ void fp4_mul_slow2(fp4_t *S, const fp4_t *X, const fp4_t *Y){
     fp_add(&S->x3,&v[1],&v[4]);
     fp_add(&S->x3,&S->x0,&v[10]);
     fp_sub(&S->x3,&S->x0,&con);
+}
+
+void fp4_add_beta_power(fp4_t *R, const fp_t *c, int k){
+    k %= 5;
+    if(k < 0) k += 5;
+
+    switch(k){
+        case 1: fp_add(&R->x0, &R->x0, c); break;
+        case 2: fp_add(&R->x1, &R->x1, c); break;
+        case 3: fp_add(&R->x3, &R->x3, c); break;
+        case 4: fp_add(&R->x2, &R->x2, c); break;
+        case 0:
+            fp_sub(&R->x0, &R->x0, c);
+            fp_sub(&R->x1, &R->x1, c);
+            fp_sub(&R->x2, &R->x2, c);
+            fp_sub(&R->x3, &R->x3, c);
+            break;
+    }
+}
+
+// (a0 + a1*x) * (b0 + b1*x)
+// → r[0] + r[1]*x + r[2]*x^2
+void fp4_mul2(fp_t r[3], const fp_t a[2], const fp_t b[2])
+{
+    fp_t t0, t1, t2, t3;
+
+    fp_mul(&t0, &a[0], &b[0]); // a0*b0
+    fp_mul(&t1, &a[0], &b[1]); // a0*b1
+    fp_mul(&t2, &a[1], &b[0]); // a1*b0
+    fp_mul(&t3, &a[1], &b[1]); // a1*b1
+
+    r[0] = t0;
+    fp_add(&r[1], &t1, &t2);
+    r[2] = t3;
+}
+
+void fp4_mul_karatsuba(fp4_t *R, const fp4_t *A, const fp4_t *B)
+{
+    fp4_mul_karatsuba_count++;
+    fp_t X0[2] = {A->x0, A->x1}; // β, β^2
+    fp_t X1[2] = {A->x2, A->x3}; // β^4, β^3
+    fp_t Y0[2] = {B->x0, B->x1};
+    fp_t Y1[2] = {B->x2, B->x3};
+
+    fp_t T0[3], T1[3], T2[3];
+    fp_t Sx[2], Sy[2];
+
+    // クリア
+    memset(R, 0, sizeof(fp4_t));
+
+    // T0 = X0 * Y0
+    fp4_mul2(T0, X0, Y0);
+
+    // T1 = X1 * Y1
+    fp4_mul2(T1, X1, Y1);
+
+    // Sx = X0 + X1, Sy = Y0 + Y1
+    fp_add(&Sx[0], &X0[0], &X1[0]);
+    fp_add(&Sx[1], &X0[1], &X1[1]);
+    fp_add(&Sy[0], &Y0[0], &Y1[0]);
+    fp_add(&Sy[1], &Y0[1], &Y1[1]);
+
+    // T2 = (X0+X1)(Y0+Y1)
+    fp4_mul2(T2, Sx, Sy);
+
+    // M = T2 - T0 - T1
+    for (int i = 0; i < 3; i++) {
+        fp_sub(&T2[i], &T2[i], &T0[i]);
+        fp_sub(&T2[i], &T2[i], &T1[i]);
+    }
+
+    // T0: X0*Y0
+    fp4_add_beta_power(R, &T0[0], 2); // β*β = β^2
+    fp4_add_beta_power(R, &T0[1], 3); // β*β^2
+    fp4_add_beta_power(R, &T0[2], 4); // β^2*β^2
+
+    // M: (X0*Y1 + X1*Y0)
+    fp4_add_beta_power(R, &T2[0], 5); // β*β^4 = β^5 = 1
+    fp4_add_beta_power(R, &T2[1], 6); // β*β^3 = β^4
+    fp4_add_beta_power(R, &T2[2], 7); // β^2*β^4 = β^6 = β
+
+    // T1: X1*Y1
+    fp4_add_beta_power(R, &T1[0], 8); // β^4*β^4 = β^8 = β^3
+    fp4_add_beta_power(R, &T1[1], 7); // β^4*β^3 = β^7 = β^2
+    fp4_add_beta_power(R, &T1[2], 6); // β^3*β^3 = β^6 = β
+}
+
+
+// 2乗 (実装簡略化のため mul を呼び出す)
+// ※ 正規基底では S = X^(2^k) は高速だが、S = X^2 は乗算と同じコストがかかる
+void fp4_sqr(fp4_t *S, const fp4_t *X){
+    fp4_mul(S, X, X);
 }
 
 // 繰り返し2乗法によるべき乗
@@ -315,62 +354,69 @@ void fp4_inv(fp4_t *S, const fp4_t *X){
     fp4_mul(S, &numerator, &norm);
 }
 
-// 逆元 S = 1/X
-// X^(-1) = (X^p * X^(p^2) * X^(p^3)) / Norm(X)
 void fp4_inv_slow(fp4_t *S, const fp4_t *X){
     fp4_t t1, t2, numerator, norm;
-    // 変数の初期化は構造体定義によるが、今回は代入で上書きされるので不要
-    
-    // 1. t1 = X^p
+
     fp4_frobenius_map(&t1, X);
     
-    // 2. t2 = X * X^p  (= X^(1+p))
-    fp4_mul_slow2(&t2, X, &t1);
+    fp4_mul_slow(&t2, X, &t1);
     
-    // 3. t1 = X^(p^2)
     fp4_frobenius_map(&t1, &t1); // (X^p)^p
     
-    // 4. numerator = (X * X^p) * X^(p^2)  (= X^(1+p+p^2))
-    // これが逆元の分子の元（X^p * X^p^2 * X^p^3）に近い形
-    fp4_mul_slow2(&numerator, &t2, &t1);
+    fp4_mul_slow(&numerator, &t2, &t1);
     
-    // 5. t1 = X^(p^3)
     fp4_frobenius_map(&t1, &t1); // (X^p^2)^p
     
-    // 6. norm = numerator * X^(p^3)  (= X^(1+p+p^2+p^3))
-    // これがノルム。正規基底ではスカラ値となる。
-    fp4_mul_slow2(&norm, &numerator, &t1);
+    fp4_mul_slow(&norm, &numerator, &t1);
     
-    // 7. 分子の仕上げ: numerator を p乗する
-    // 現在 numerator = X^(1+p+p^2) なので、
-    // p乗すると X^(p+p^2+p^3) となり、求めたかった「自分以外の積」になる
     fp4_frobenius_map(&numerator, &numerator);
 
-    // 8. ノルムの逆数計算 (Fp上での計算)
-    // ノルムはスカラなので、正規基底表現では全係数が同じ値になっているはず。
-    // x0 成分だけ取り出して Fp 上で逆元を取ればよい。
-    
     if (fp_is_zero(&norm.x0)) {
         // 0の逆元はないので 0 を返す（またはエラー処理）
         fp4_set_ui(S, 0);
         return;
     }
-    
-    // d = norm.x0 とすると、このベクトルは整数 -d を表している。
-    // 欲しいのは (-d)^(-1) を表すベクトル。
-    // (-d)^(-1) = -(d^(-1)) なので、係数は d^(-1) になる。
-    // つまり、単に係数の逆数を取って、全成分にセットすればよい。
+
     fp_inv(&norm.x0, &norm.x0); // x0 = x0^(-1)
     
-    // 求めた逆数を全成分にセットして、スカラ倍用のベクトルを作る
     fp_set(&norm.x1, &norm.x0);
     fp_set(&norm.x2, &norm.x0);
     fp_set(&norm.x3, &norm.x0);
     
-    // 9. 最後に分子とノルムの逆数を掛ける
-    fp4_mul_slow2(S, &numerator, &norm);
+    fp4_mul_slow(S, &numerator, &norm);
 }
 
+void fp4_inv_karatsuba(fp4_t *S, const fp4_t *X){
+    fp4_t t1, t2, numerator, norm;
+
+    fp4_frobenius_map(&t1, X);
+    
+    fp4_mul_karatsuba(&t2, X, &t1);
+    
+    fp4_frobenius_map(&t1, &t1); // (X^p)^p
+    
+    fp4_mul_karatsuba(&numerator, &t2, &t1);
+    
+    fp4_frobenius_map(&t1, &t1); // (X^p^2)^p
+    
+    fp4_mul_karatsuba(&norm, &numerator, &t1);
+    
+    fp4_frobenius_map(&numerator, &numerator);
+
+    if (fp_is_zero(&norm.x0)) {
+        // 0の逆元はないので 0 を返す（またはエラー処理）
+        fp4_set_ui(S, 0);
+        return;
+    }
+
+    fp_inv(&norm.x0, &norm.x0); // x0 = x0^(-1)
+    
+    fp_set(&norm.x1, &norm.x0);
+    fp_set(&norm.x2, &norm.x0);
+    fp_set(&norm.x3, &norm.x0);
+    
+    fp4_mul_karatsuba(S, &numerator, &norm);
+}
 
 // quartic residue 判定: x^{(p^4-1)/4} = 1 なら4乗根が存在
 int fp4_has_4th_root(const fp4_t *X){

@@ -252,12 +252,18 @@ int main(void){
     int iters = 1000000;
     bench_fp4_mul(iters); // 詳細は関数内で表示
 
+    // --- Benchmark fp4_mul_karatsuba ---
+    bench_fp4_mul_karatsuba(iters); // 詳細は関数内で表示
+
     // --- Benchmark fp4_mul_slow ---
     bench_fp4_mul_slow(iters); // 詳細は関数内で表示
 
     // --- Benchmark fp16_inv ---
     int inv_iters = 10000;
     bench_fp16_inv(inv_iters); // 詳細は関数内で表示
+
+    // --- Benchmark fp16_inv_karatsuba ---
+    bench_fp16_inv_karatsuba(inv_iters); // 詳細は関数内で表示
 
     // --- Benchmark fp16_inv_slow ---
     bench_fp16_inv_slow(inv_iters); // 詳細は関数内で表示
