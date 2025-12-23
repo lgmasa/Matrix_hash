@@ -1,6 +1,8 @@
 #include "16_header.h"
 
 uint64_t fp_mul_count = 0; // 乗算回数カウンタ
+uint64_t fp_add_count = 0; // 加算回数カウンタ
+uint64_t fp_sub_count = 0; // 減算回数カウンタ
 
 // 64bitの計算結果を 31bit (mod p) に落とし込む関数
 static inline uint32_t reduce_mersenne(uint64_t x) {
@@ -77,6 +79,7 @@ void fp_neg(fp_t *S, const fp_t *X){
 
 // 和 S = X + Y
 void fp_add(fp_t *S, const fp_t *X, const fp_t *Y){
+    fp_add_count++;
     uint32_t sum = X->x0 + Y->x0;
         if (sum >= P_MERSENNE) {
             sum -= P_MERSENNE;
@@ -86,6 +89,7 @@ void fp_add(fp_t *S, const fp_t *X, const fp_t *Y){
 
 // 差 S = X - Y
 void fp_sub(fp_t *S, const fp_t *X, const fp_t *Y){
+    fp_sub_count++;
     uint32_t x = X->x0;
     uint32_t y = Y->x0;
     

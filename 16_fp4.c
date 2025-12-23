@@ -212,16 +212,23 @@ void fp4_add_beta_power(fp4_t *R, const fp_t *c, int k){
 // → r[0] + r[1]*x + r[2]*x^2
 void fp4_mul2(fp_t r[3], const fp_t a[2], const fp_t b[2])
 {
-    fp_t t0, t1, t2, t3;
+    // Karatsuba: 3 mul (m0, m2, m1 cross term)
+    fp_t m0, m2, s1, s2, m1;
 
-    fp_mul(&t0, &a[0], &b[0]); // a0*b0
-    fp_mul(&t1, &a[0], &b[1]); // a0*b1
-    fp_mul(&t2, &a[1], &b[0]); // a1*b0
-    fp_mul(&t3, &a[1], &b[1]); // a1*b1
+    // m0 = a0*b0, m2 = a1*b1
+    fp_mul(&m0, &a[0], &b[0]);
+    fp_mul(&m2, &a[1], &b[1]);
 
-    r[0] = t0;
-    fp_add(&r[1], &t1, &t2);
-    r[2] = t3;
+    // m1 = (a0+a1)*(b0+b1) - m0 - m2
+    fp_add(&s1, &a[0], &a[1]);
+    fp_add(&s2, &b[0], &b[1]);
+    fp_mul(&m1, &s1, &s2);
+    fp_sub(&m1, &m1, &m0);
+    fp_sub(&m1, &m1, &m2);
+
+    r[0] = m0;
+    r[1] = m1;
+    r[2] = m2;
 }
 
 void fp4_mul_karatsuba(fp4_t *R, const fp4_t *A, const fp4_t *B)
@@ -234,9 +241,6 @@ void fp4_mul_karatsuba(fp4_t *R, const fp4_t *A, const fp4_t *B)
 
     fp_t T0[3], T1[3], T2[3];
     fp_t Sx[2], Sy[2];
-
-    // クリア
-    memset(R, 0, sizeof(fp4_t));
 
     // T0 = X0 * Y0
     fp4_mul2(T0, X0, Y0);
@@ -259,20 +263,22 @@ void fp4_mul_karatsuba(fp4_t *R, const fp4_t *A, const fp4_t *B)
         fp_sub(&T2[i], &T2[i], &T1[i]);
     }
 
-    // T0: X0*Y0
-    fp4_add_beta_power(R, &T0[0], 2); // β*β = β^2
-    fp4_add_beta_power(R, &T0[1], 3); // β*β^2
-    fp4_add_beta_power(R, &T0[2], 4); // β^2*β^2
+    // 係数は k mod 5 の加算規則に基づき展開して直接合成する
+    // x0 = T2[1] + T1[2] - T2[0]
+    fp_add(&R->x0, &T2[1], &T1[2]);
+    fp_sub(&R->x0, &R->x0, &T2[0]);
 
-    // M: (X0*Y1 + X1*Y0)
-    fp4_add_beta_power(R, &T2[0], 5); // β*β^4 = β^5 = 1
-    fp4_add_beta_power(R, &T2[1], 6); // β*β^3 = β^4
-    fp4_add_beta_power(R, &T2[2], 7); // β^2*β^4 = β^6 = β
+    // x1 = T0[0] + T2[2] + T1[1] - T2[0]
+    fp_add(&R->x1, &T0[0], &T2[2]);
+    fp_add(&R->x1, &R->x1, &T1[1]);
+    fp_sub(&R->x1, &R->x1, &T2[0]);
 
-    // T1: X1*Y1
-    fp4_add_beta_power(R, &T1[0], 8); // β^4*β^4 = β^8 = β^3
-    fp4_add_beta_power(R, &T1[1], 7); // β^4*β^3 = β^7 = β^2
-    fp4_add_beta_power(R, &T1[2], 6); // β^3*β^3 = β^6 = β
+    // x2 = T0[2] - T2[0]
+    fp_sub(&R->x2, &T0[2], &T2[0]);
+
+    // x3 = T0[1] + T1[0] - T2[0]
+    fp_add(&R->x3, &T0[1], &T1[0]);
+    fp_sub(&R->x3, &R->x3, &T2[0]);
 }
 
 

@@ -102,13 +102,18 @@ void fp16_inv_karatsuba(fp16_t *S, const fp16_t *X);
 int fp16_is_scalar(const fp16_t *X);
 
 //get time
-long bench_fp4_mul(int iters);
-long bench_fp4_mul_slow(int iters);
-long bench_fp4_mul_karatsuba(int iters);
-long bench_fp16_inv(int iters);
-long bench_fp16_inv_slow(int iters);
-long bench_fp16_inv_karatsuba(int iters);
+long bench_fp_add_avg(int iters, int count);
+long bench_fp_sub_avg(int iters, int count);
+long bench_fp_mul_avg(int iters, int count);
+long bench_fp4_mul_avg(int iters, int count);
+long bench_fp4_mul_karatsuba_avg(int iters, int count);
+long bench_fp4_mul_slow_avg(int iters, int count);
+long bench_fp16_inv_avg(int iters, int count);
+long bench_fp16_inv_karatsuba_avg(int iters, int count);
+long bench_fp16_inv_slow_avg(int iters, int count);
 extern uint64_t fp_mul_count;
+extern uint64_t fp_add_count;
+extern uint64_t fp_sub_count;
 extern uint64_t fp4_mul_count;
 extern uint64_t fp4_mul_karatsuba_count;
 extern uint64_t fp4_mul_slow_count;
