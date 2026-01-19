@@ -110,15 +110,13 @@ void fp4_mul(fp4_t *S, const fp4_t *X, const fp4_t *Y){
     fp_mul(&v[1], &X->x1, &Y->x1);
     fp_mul(&v[2], &X->x2, &Y->x2);
     fp_mul(&v[3], &X->x3, &Y->x3);
-    v[4].x0 = 0; // v_m
-
     // (0,1) -> σ=3
     fp_sub(&dx, &X->x0, &X->x1); fp_sub(&dy, &Y->x0, &Y->x1);
     fp_mul(&t, &dx, &dy); fp_add(&v[3], &v[3], &t);
 
     // (0,2) -> σ=4
     fp_sub(&dx, &X->x0, &X->x2); fp_sub(&dy, &Y->x0, &Y->x2);
-    fp_mul(&t, &dx, &dy); fp_add(&v[4], &v[4], &t);
+    fp_mul(&v[4], &dx, &dy);
 
     // (0,3) -> σ=2
     fp_sub(&dx, &X->x0, &X->x3); fp_sub(&dy, &Y->x0, &Y->x3);
@@ -143,50 +141,144 @@ void fp4_mul(fp4_t *S, const fp4_t *X, const fp4_t *Y){
     fp_sub(&S->x3, &v[4], &v[3]);
 }
 
+void fp4_mul_new(fp4_t *S, const fp4_t *X, const fp4_t *Y)
+{
+    fp4_mul_count++;
+
+    // 基底順：{ω, ω^2, ω^4, ω^3}
+    // 係数順：x0, x1, x2, x3
+
+    fp_t p0, p1, p2, p3;     // 対角（4 mul）
+    fp_t A, B, C, D, E;      // 差分積4 + まとめ積1（計5 mul）
+    fp_t U;
+
+    // --- 差分・和のキャッシュ（CSE） ---
+    fp_t dx01, dx12, dx03, dx32;
+    fp_t dy01, dy12, dy03, dy32;
+    fp_t sx01, sx23, sy01, sy23;  // 和（E用）
+
+    // dx*
+    fp_sub(&dx01, &X->x0, &X->x1);   // x0-x1
+    fp_sub(&dx12, &X->x1, &X->x2);   // x1-x2
+    fp_sub(&dx03, &X->x0, &X->x3);   // x0-x3
+    fp_sub(&dx32, &X->x3, &X->x2);   // x3-x2
+
+    // dy*
+    fp_sub(&dy01, &Y->x0, &Y->x1);   // y0-y1
+    fp_sub(&dy12, &Y->x1, &Y->x2);   // y1-y2
+    fp_sub(&dy03, &Y->x0, &Y->x3);   // y0-y3
+    fp_sub(&dy32, &Y->x3, &Y->x2);   // y3-y2
+
+    // --- 対角（4回） ---
+    fp_mul(&p0, &X->x0, &Y->x0);     // x0*y0
+    fp_mul(&p1, &X->x1, &Y->x1);     // x1*y1
+    fp_mul(&p2, &X->x2, &Y->x2);     // x2*y2
+    fp_mul(&p3, &X->x3, &Y->x3);     // x3*y3
+
+    // --- 差分積（4回） ---
+    // A = (x1 - x2)(y1 - y2)
+    fp_mul(&A, &dx12, &dy12);
+
+    // B = (x3 - x2)(y3 - y2)
+    fp_mul(&B, &dx32, &dy32);
+
+    // C = (x0 - x1)(y0 - y1)
+    fp_mul(&C, &dx01, &dy01);
+
+    // D = (x0 - x3)(y0 - y3)
+    fp_mul(&D, &dx03, &dy03);
+
+    // --- まとめ積 E（1回） ---
+    // E = (x0 + x1 - x2 - x3)(y0 + y1 - y2 - y3)
+    fp_add(&sx01, &X->x0, &X->x1);   // x0+x1
+    fp_add(&sx23, &X->x2, &X->x3);   // x2+x3
+    fp_sub(&sx01, &sx01, &sx23);     // (x0+x1)-(x2+x3)
+
+    fp_add(&sy01, &Y->x0, &Y->x1);   // y0+y1
+    fp_add(&sy23, &Y->x2, &Y->x3);   // y2+y3
+    fp_sub(&sy01, &sy01, &sy23);     // (y0+y1)-(y2+y3)
+
+    fp_mul(&E, &sx01, &sy01);
+
+    // --- U = E + C - D - A + B （sub→add置換はしない） ---
+    fp_set(&U, &E);
+    fp_add(&U, &U, &C);
+    fp_sub(&U, &U, &D);
+    fp_sub(&U, &U, &A);
+    fp_add(&U, &U, &B);
+
+    // --- 出力（基底順 {ω, ω^2, ω^4, ω^3}） ---
+    // ω
+    fp_set(&S->x0, &U);
+    fp_sub(&S->x0, &S->x0, &A);
+    fp_sub(&S->x0, &S->x0, &p0);
+
+    // ω^2
+    fp_set(&S->x1, &U);
+    fp_sub(&S->x1, &S->x1, &B);
+    fp_sub(&S->x1, &S->x1, &p1);
+
+    // ω^4
+    fp_set(&S->x2, &U);
+    fp_sub(&S->x2, &S->x2, &D);
+    fp_sub(&S->x2, &S->x2, &p2);
+
+    // ω^3
+    fp_set(&S->x3, &U);
+    fp_sub(&S->x3, &S->x3, &C);
+    fp_sub(&S->x3, &S->x3, &p3);
+}
+
+void fp4_mul_nre(fp4_t *S, const fp4_t *X){
+    fp4_mul_new(S, X, &alpha);
+}
+
 void fp4_mul_slow(fp4_t *S, const fp4_t *X, const fp4_t *Y){
     fp4_mul_slow_count++;
-    fp_t v[16];
-    for(int i=0;i<16;i++){
-        fp_init(&v[i]);
-    }
-    fp_mul(&v[0],&X->x0,&Y->x0);
-    fp_mul(&v[1],&X->x0,&Y->x1);
-    fp_mul(&v[2],&X->x0,&Y->x2);
-    fp_mul(&v[3],&X->x0,&Y->x3);
-    fp_mul(&v[4],&X->x1,&Y->x0);
-    fp_mul(&v[5],&X->x1,&Y->x1);
-    fp_mul(&v[6],&X->x1,&Y->x2);
-    fp_mul(&v[7],&X->x1,&Y->x3);
-    fp_mul(&v[8],&X->x2,&Y->x0);
-    fp_mul(&v[9],&X->x2,&Y->x1);
-    fp_mul(&v[10],&X->x2,&Y->x2);
-    fp_mul(&v[11],&X->x2,&Y->x3);
-    fp_mul(&v[12],&X->x3,&Y->x0);
-    fp_mul(&v[13],&X->x3,&Y->x1);
-    fp_mul(&v[14],&X->x3,&Y->x2);
-    fp_mul(&v[15],&X->x3,&Y->x3);
+    fp_t v0, v1, v2, v3, v4, v5, v6, v7;
+    fp_t v8, v9, v10, v11, v12, v13, v14, v15;
+    fp_init(&v0); fp_init(&v1); fp_init(&v2); fp_init(&v3);
+    fp_init(&v4); fp_init(&v5); fp_init(&v6); fp_init(&v7);
+    fp_init(&v8); fp_init(&v9); fp_init(&v10); fp_init(&v11);
+    fp_init(&v12); fp_init(&v13); fp_init(&v14); fp_init(&v15);
+    fp_mul(&v0,&X->x0,&Y->x0);
+    fp_mul(&v1,&X->x0,&Y->x1);
+    fp_mul(&v2,&X->x0,&Y->x2);
+    fp_mul(&v3,&X->x0,&Y->x3);
+    fp_mul(&v4,&X->x1,&Y->x0);
+    fp_mul(&v5,&X->x1,&Y->x1);
+    fp_mul(&v6,&X->x1,&Y->x2);
+    fp_mul(&v7,&X->x1,&Y->x3);
+    fp_mul(&v8,&X->x2,&Y->x0);
+    fp_mul(&v9,&X->x2,&Y->x1);
+    fp_mul(&v10,&X->x2,&Y->x2);
+    fp_mul(&v11,&X->x2,&Y->x3);
+    fp_mul(&v12,&X->x3,&Y->x0);
+    fp_mul(&v13,&X->x3,&Y->x1);
+    fp_mul(&v14,&X->x3,&Y->x2);
+    fp_mul(&v15,&X->x3,&Y->x3);
 
     fp_t con;
     fp_init(&con);
-    fp_add(&con,&v[2],&v[8]);
-    fp_add(&con,&con,&v[7]);
-    fp_add(&con,&con,&v[13]);
+    fp_add(&con,&v2,&v8);
+    fp_add(&con,&con,&v7);
+    fp_add(&con,&con,&v13);
 
     //c0
-    fp_add(&S->x0,&v[6],&v[10]);
-    fp_add(&S->x0,&S->x0,&v[15]);
+    fp_add(&S->x0,&v6,&v10);
+    fp_add(&S->x0,&S->x0,&v15);
     fp_sub(&S->x0,&S->x0,&con);
     //c1
-    fp_add(&S->x1,&v[0],&v[11]);
-    fp_add(&S->x1,&S->x0,&v[14]);
+    fp_add(&S->x1,&v0,&v11);
+    fp_add(&S->x1,&S->x0,&v14);
     fp_sub(&S->x1,&S->x0,&con);
     //c2
-    fp_add(&S->x2,&v[3],&v[5]);
-    fp_add(&S->x2,&S->x0,&v[12]);
+    fp_add(&S->x2,&v3,&v5);
+    fp_add(&S->x2,&S->x0,&v12);
     fp_sub(&S->x2,&S->x0,&con);
     //c3
-    fp_add(&S->x3,&v[1],&v[4]);
-    fp_add(&S->x3,&S->x0,&v[10]);
+    fp_add(&S->x3,&v1,&v4);
+    fp_add(&S->x3,&S->x0,&v10);
     fp_sub(&S->x3,&S->x0,&con);
 }
 
@@ -422,6 +514,38 @@ void fp4_inv_karatsuba(fp4_t *S, const fp4_t *X){
     fp_set(&norm.x3, &norm.x0);
     
     fp4_mul_karatsuba(S, &numerator, &norm);
+}
+
+void fp4_inv_new(fp4_t *S, const fp4_t *X){
+    fp4_t t1, t2, numerator, norm;
+
+    fp4_frobenius_map(&t1, X);
+    
+    fp4_mul_new(&t2, X, &t1);
+    
+    fp4_frobenius_map(&t1, &t1); // (X^p)^p
+    
+    fp4_mul_new(&numerator, &t2, &t1);
+    
+    fp4_frobenius_map(&t1, &t1); // (X^p^2)^p
+    
+    fp4_mul_new(&norm, &numerator, &t1);
+    
+    fp4_frobenius_map(&numerator, &numerator);
+
+    if (fp_is_zero(&norm.x0)) {
+        // 0の逆元はないので 0 を返す（またはエラー処理）
+        fp4_set_ui(S, 0);
+        return;
+    }
+
+    fp_inv(&norm.x0, &norm.x0); // x0 = x0^(-1)
+    
+    fp_set(&norm.x1, &norm.x0);
+    fp_set(&norm.x2, &norm.x0);
+    fp_set(&norm.x3, &norm.x0);
+    
+    fp4_mul_new(S, &numerator, &norm);
 }
 
 // quartic residue 判定: x^{(p^4-1)/4} = 1 なら4乗根が存在

@@ -249,29 +249,35 @@ int main(void){
     // printf("A16*1/A16 = "); fp16_printf(&res16);
 
 
-    int iters = 10000;
-    bench_fp_add_avg(iters, 100);
-    bench_fp_sub_avg(iters, 100);
-    bench_fp_mul_avg(iters, 100);
+    int iters = 100;
+    bench_fp_add_avg(iters, 1000000);
+    bench_fp_sub_avg(iters, 1000000);
+    bench_fp_mul_avg(iters, 1000000);
 
     // --- Benchmark fp4_mul ---
-    bench_fp4_mul_avg(iters, 100);
+    bench_fp4_mul_avg(iters, 1000000);
+
+    // --- Benchmark fp4_mul_new ---
+    bench_fp4_mul_new_avg(iters, 1000000);
 
     // --- Benchmark fp4_mul_karatsuba ---
-    bench_fp4_mul_karatsuba_avg(iters, 100);
+    bench_fp4_mul_karatsuba_avg(iters, 1000000);
 
     // --- Benchmark fp4_mul_slow ---
-    bench_fp4_mul_slow_avg(iters, 100);
+    bench_fp4_mul_slow_avg(iters, 1000000);
 
     // --- Benchmark fp16_inv ---
     int inv_iters = 100;
-    bench_fp16_inv_avg(inv_iters, 100);
+    bench_fp16_inv_avg(inv_iters, 1000000);
+
+    // --- Benchmark fp16_inv_new ---
+    bench_fp16_inv_new_avg(inv_iters, 1000000);
 
     // --- Benchmark fp16_inv_karatsuba ---
-    bench_fp16_inv_karatsuba_avg(inv_iters, 100);
+    bench_fp16_inv_karatsuba_avg(inv_iters, 1000000);
 
     // --- Benchmark fp16_inv_slow ---
-    bench_fp16_inv_slow_avg(inv_iters, 100);
+    bench_fp16_inv_slow_avg(inv_iters, 1000000);
 
     return 0;
 }
