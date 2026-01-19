@@ -265,21 +265,21 @@ void fp4_mul_slow(fp4_t *S, const fp4_t *X, const fp4_t *Y){
     fp_add(&con,&con,&v13);
 
     //c0
-    fp_add(&S->x0,&v6,&v10);
+    fp_add(&S->x0,&v6,&v9);
     fp_add(&S->x0,&S->x0,&v15);
     fp_sub(&S->x0,&S->x0,&con);
     //c1
     fp_add(&S->x1,&v0,&v11);
-    fp_add(&S->x1,&S->x0,&v14);
-    fp_sub(&S->x1,&S->x0,&con);
+    fp_add(&S->x1,&S->x1,&v14);
+    fp_sub(&S->x1,&S->x1,&con);
     //c2
     fp_add(&S->x2,&v3,&v5);
-    fp_add(&S->x2,&S->x0,&v12);
-    fp_sub(&S->x2,&S->x0,&con);
+    fp_add(&S->x2,&S->x2,&v12);
+    fp_sub(&S->x2,&S->x2,&con);
     //c3
     fp_add(&S->x3,&v1,&v4);
-    fp_add(&S->x3,&S->x0,&v10);
-    fp_sub(&S->x3,&S->x0,&con);
+    fp_add(&S->x3,&S->x3,&v10);
+    fp_sub(&S->x3,&S->x3,&con);
 }
 
 void fp4_add_beta_power(fp4_t *R, const fp_t *c, int k){
@@ -327,9 +327,9 @@ void fp4_mul_karatsuba(fp4_t *R, const fp4_t *A, const fp4_t *B)
 {
     fp4_mul_karatsuba_count++;
     fp_t X0[2] = {A->x0, A->x1}; // β, β^2
-    fp_t X1[2] = {A->x2, A->x3}; // β^4, β^3
+    fp_t X1[2] = {A->x3, A->x2}; // β^3, β^4
     fp_t Y0[2] = {B->x0, B->x1};
-    fp_t Y1[2] = {B->x2, B->x3};
+    fp_t Y1[2] = {B->x3, B->x2};
 
     fp_t T0[3], T1[3], T2[3];
     fp_t Sx[2], Sy[2];
@@ -356,21 +356,21 @@ void fp4_mul_karatsuba(fp4_t *R, const fp4_t *A, const fp4_t *B)
     }
 
     // 係数は k mod 5 の加算規則に基づき展開して直接合成する
-    // x0 = T2[1] + T1[2] - T2[0]
-    fp_add(&R->x0, &T2[1], &T1[2]);
-    fp_sub(&R->x0, &R->x0, &T2[0]);
+    // x0 = T1[0] - T2[1] + T2[2]
+    fp_sub(&R->x0, &T1[0], &T2[1]);
+    fp_add(&R->x0, &R->x0, &T2[2]);
 
-    // x1 = T0[0] + T2[2] + T1[1] - T2[0]
-    fp_add(&R->x1, &T0[0], &T2[2]);
-    fp_add(&R->x1, &R->x1, &T1[1]);
-    fp_sub(&R->x1, &R->x1, &T2[0]);
+    // x1 = T0[0] + T1[1] - T2[1]
+    fp_add(&R->x1, &T0[0], &T1[1]);
+    fp_sub(&R->x1, &R->x1, &T2[1]);
 
-    // x2 = T0[2] - T2[0]
-    fp_sub(&R->x2, &T0[2], &T2[0]);
+    // x2 = T0[2] + T2[0] - T2[1]
+    fp_add(&R->x2, &T0[2], &T2[0]);
+    fp_sub(&R->x2, &R->x2, &T2[1]);
 
-    // x3 = T0[1] + T1[0] - T2[0]
-    fp_add(&R->x3, &T0[1], &T1[0]);
-    fp_sub(&R->x3, &R->x3, &T2[0]);
+    // x3 = T0[1] + T1[2] - T2[1]
+    fp_add(&R->x3, &T0[1], &T1[2]);
+    fp_sub(&R->x3, &R->x3, &T2[1]);
 }
 
 
