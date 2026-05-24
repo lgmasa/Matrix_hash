@@ -30,6 +30,13 @@ void fp4_set(fp4_t *S, const fp4_t *X){
     fp_set(&S->x3,&X->x3);
 }
 
+void fp4_set_zero(fp4_t *S){
+    fp_set_zero(&S->x0);
+    fp_set_zero(&S->x1);
+    fp_set_zero(&S->x2);
+    fp_set_zero(&S->x3);
+}
+
 void fp4_set_ui(fp4_t *S, unsigned long int x){
     // 1 = -(γ + ... + γ^3)
     uint32_t val = (uint32_t)x;
@@ -701,7 +708,7 @@ int fp4_is_scalar(const fp4_t *X){
            fp_is_equal(&X->x0, &X->x3);
 }
 
-int fp4_is_zero_vec(const fp4_t *X){
+int fp4_is_zero(const fp4_t *X){
     return fp_is_zero(&X->x0) && fp_is_zero(&X->x1) &&
            fp_is_zero(&X->x2) && fp_is_zero(&X->x3);
 }

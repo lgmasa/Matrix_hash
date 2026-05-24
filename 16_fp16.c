@@ -34,6 +34,13 @@ void fp16_set(fp16_t *S, const fp16_t *X){
     fp4_set(&S->x3, &X->x3);
 }
 
+void fp16_set_zero(fp16_t *S){
+    fp4_set_zero(&S->x0);
+    fp4_set_zero(&S->x1);
+    fp4_set_zero(&S->x2);
+    fp4_set_zero(&S->x3);
+}
+
 void fp16_random(fp16_t *X){
     fp4_random(&X->x0);
     fp4_random(&X->x1);
@@ -46,6 +53,13 @@ int fp16_is_equal(const fp16_t *A, const fp16_t *B){
             fp4_is_equal(&A->x1, &B->x1) &&
             fp4_is_equal(&A->x2, &B->x2) &&
             fp4_is_equal(&A->x3, &B->x3));
+}
+
+int fp16_is_zero(const fp16_t *X){
+    return fp4_is_zero(&X->x0) &&
+           fp4_is_zero(&X->x1) &&
+           fp4_is_zero(&X->x2) &&
+           fp4_is_zero(&X->x3);
 }
 
 void fp16_add(fp16_t *S, const fp16_t *X, const fp16_t *Y){
@@ -501,7 +515,7 @@ void fp16_pow(fp16_t *S, const fp16_t *X, const mpz_t exp){
 
 int fp16_is_scalar(const fp16_t *X){
     return fp4_is_scalar(&X->x0) &&
-           fp4_is_zero_vec(&X->x1) &&
-           fp4_is_zero_vec(&X->x2) &&
-           fp4_is_zero_vec(&X->x3);
+           fp4_is_zero(&X->x1) &&
+           fp4_is_zero(&X->x2) &&
+           fp4_is_zero(&X->x3);
 }

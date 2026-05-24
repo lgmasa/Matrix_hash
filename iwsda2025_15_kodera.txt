@@ -1,0 +1,725 @@
+MATRIX: Mixed-basis Architecture using Towering Field
+Representations for Extendable Grøstl State Blocks
+1st Yuta Kodera
+
+2nd Yasuyuki Nogami
+
+Graduate School of Environment, Life,
+Natural Science and Technology, Okayama University,
+Okayama, Japan
+yuta kodera@okayama-u.ac.jp
+
+Graduate School of Environment, Life,
+Natural Science and Technology, Okayama University,
+Okayama, Japan
+yasuyuki.nogami@okayama-u.ac.jp
+
+Abstract—This paper introduces a novel matrix representation
+for the Grøstl hash function using a Mersenne prime and a tower
+of ﬁelds. Our approach focuses on the structure of a tower of
+ﬁelds, and we propose to regard it as a matrix to reduce the circuit
+size by conducting the round operations without lookup tables.
+Especially, we adopt a mixed basis architecture using a Gauss
+normal basis and a polynomial basis to build a tower of ﬁelds.
+This approach allows a simple modular arithmetic and optimal
+table-less round operation that inherits the basic principle of the
+Grøstl design.
+Index Terms—Grøstl, Mersenne primes, tower of ﬁelds, Gauss
+normal basis
+
+I. I NTRODUCTION
+Cryptographic hash functions are one of the inseparable
+primitives for a modern digital infrastructure to protect from
+the falsiﬁcation of data, such as codes and signatures, for
+example. In addition, a hash function is also valuable for
+realizing cryptocurrencies on a blockchain mechanism and
+password management, including authentication logics.
+Recently, these systems have been leveraged even on
+resource-limited devices such as IoT devices, embedded systems, and mobile applications. It increases the opportunity
+of multiplatform implementation for cryptographic primitives,
+and this sometimes induces an obstacle, in particular for
+the memory consumption. To overcome the drawbacks, we
+introduce a novel structure of a cryptographic hash function
+based on Grøstl [1].
+Grøstl is a well-known cryptographic hash function as a
+SHA-3 ﬁnalist, which is designed as a byte-oriented SPnetwork. The component is borrowed from the AES [2], and
+the permutations in the compression function there are inspired
+by the Rijndael block cipher [3]. It has been widely studied
+in many aspects.
+For example, Kaur et al. [4] proposed a modiﬁed Grøstl
+that guarantees the equivalent security level as the original
+one, and Rao et al. [5] proposed an efﬁcient implementation
+for an FPGA (ﬁeld-programmable gate array). In addition,
+researchers steadily made advances in breaking AES-like hash
+functions [6]–[8] including Grøstl. These results indicate that
+the risks of attacks have increased in proportion to the design
+of a hash function that becomes closer to that of AES.
+In this context, we think that another variant of an AES-like
+structure, but it’s not the same as the traditional architecture, is
+
+required for the upcoming threats. Therefore, the main purpose
+of this paper is to introduce a variant of the AES-like scheme,
+in particular for concentrating on Grøstl and its state matrix
+and efﬁcient round operations over the matrix.
+More precisely, although there are two types of state matrices in Grøstl for the short and the large variants, we propose
+to ﬁx a state block size. Since our architecture adopts two
+different basis representations to express a state matrix over
+a prime ﬁeld, it is convenient for designing, analysing, and
+implementing the hash function. More precisely, it may involve
+risks for a vulnerability that comes from the misunderstanding
+or not ﬁtting the conditions for the parameters in case a method
+requires exploring the adequate polynomials to build a tower
+of ﬁelds each time.
+Thus, we consider an optimal block size for a state matrix
+representation in this paper. On the other hand, such an
+approach lacks an opportunity to change the output size as
+the user desired, which is also realized in Grøstl as the short
+and large variants. To address this drawback, we intentionally
+leave some options for a prime ﬁeld.
+In detail, since the output size of Grøstl relies on the entire
+bit size of the internal state matrix, the short variants use 8×8
+state matrix and the large variants use 8 × 16 state matrix,
+where each entry of the respective state matrix is 8-bits hex
+value. In contrast, although our method ﬁxes the block size
+as 4, a prime ﬁeld which deﬁnes the bit size of an entry
+for a state matrix is selected from Mersenne primes such as
+27 − 1, 231 − 1, and 2127 − 1. This is because these primes
+allow us to implement an efﬁcient modular arithmetic, and the
+approximate bit size ﬁts the modern integer data types.
+Furthermore, since a modiﬁcation on the state block affects
+each round operation, we review the structure of operations for
+Grøstl by taking over the design principles of both Grøstl and
+the AES. However, concrete cryptanalysis and exploration of
+optimal maximum distance separable (MDS) matrix still have
+not been clariﬁed. These problems remain open, and we would
+like to solve them in future works.
+II. P RELIMINARIES
+This section brieﬂy reviews the fundamentals concering
+ﬁelds, bases [9], and Grøstl [1].
+
+A. Fields and bases
+Let L/K be an extension ﬁeld of a ﬁeld K and let [L : K]
+denote the dimension of L as a vector space over K. The
+dimension is assumed to be a ﬁnite in this paper; i.e. [L :
+K] = m for a positive integer m. If there is a tower of ﬁelds
+K ⊆ L ⊆ M , then [M : K] = [M : L][L : K] is held.
+A polynomial of degree n(> 0) over F is deﬁned by
+the linear combination of n coefﬁcients and the powers of a
+variable. More precisely, let F [x] be
+∑an set ofi all polynomials
+over F and let F [x] ∋ f (x) =
+i=0 fi x (fn ̸= 0) be a
+polynomial of degree n.
+Assume that f (x) is irreducible and E is the ﬁeld
+F [x]/ (f (x)), where (f (x)) is a principal ideal. Then, the
+collection
+of the powers
+of a root θ for f (x), denoted by
+}
+{
+1, θ, θ 2 , . . . , θ n−1 , form a basis, and an arbitrary element a
+∑n−1
+in the extension ﬁeld can be represented by a = i=0 ai θi ,
+where ai ∈ F . We call the basis a polynomial basis to
+distinguish it from another type of basis called a normal basis.
+A normal basis is a collection of n-linearly independent conjugates concerning a speciﬁc element, where such an element
+is specially called a normal element of E over F . Concretely,
+let F = Fp and E = Fq be a prime number p and its nth power q = pn , respectively. According to the Frobenius
+endomorphism ϕi : E → E, we can have conjugates of α ∈ Fq
+pi
+with its p-th powers ϕi (α)
+0 ≤ i }< n. If the
+{ = α , where
+n−1
+p
+p2
+set of all conjugates A = α, α , α , . . . , αp
+is linearly
+independent of each other, then A is a normal basis of Fq .
+It is noted that not every element in an extension ﬁeld
+cannot form a normal basis. However, there is a systematic
+construction scheme called Gauss normal basis (GNBs) [10]–
+[14].
+For a prime p and an extension degree m, the GNBs can
+be constructed with a cyclotomic polynomial of degree kh + 1
+when the parameters satisfy the all conditions below.
+• p ̸= mh + 1
+• gcd(e, mh/e) = 1 for the order e of p under the modulo
+m.
+Let Φm (x) be a polynomial over Fp and let β be a root
+of Φm (x). Then, a normal element α is obtained by α =
+∑
+h−1 dih
+and the collection of the conjugates of α forms a
+i=0 β
+normal basis, where dh is a primitive h-th root of unity.
+B. Grøstl
+1) Overview of the construction: The hash function Grøstl
+[1] was selected as a ﬁnalist in the SHA-3 competition. It is
+designed that the component of the Grøstl is a byte-oriented
+SP-network based on the AES [2]. Since Grøstl has a widepipe construction, which means the size of the output is much
+shorter than that of the internal state, the risks against wellknown attacks degrade.
+More formally, Grøstl is deﬁned with a compression function f and an output transformation, denoted by Ω, as illustrated in Fig. 1, where Ω is a function that truncates an l-bit
+input to the n-bit output for positive integers l and n such that
+l ≥ 2n.
+
+Fig. 1. Overview of the construction of Grøstl hash function
+
+Grøstl iterates f and truncates the t-th output of f , where t
+is a positive integer that is derived from the number of message
+blocks. Let hi be the output of f in the i-th iteration, and let
+M denote the message. The message is split into message
+blocks of length l, where l is a ﬁxed integer determined as
+l = 512 if Grøstl variants return up to 256 bits and l = 1024
+for larger variants.
+Let h0 = iv be an initial l-bit value. The compression
+function f maps two inputs hi−1 and mi to an l-bit output hi
+as follows, where i = 1, 2, . . ..
+hi ← f (hi−1 , mi )
+More precisely, the function f is made up of two l-bit
+permutations, denoted by P and Q, respectively, as follows:
+f (hi−1 , mi ) = P (hi−1 ⊕ mi ) ⊕ Q(mi ) ⊕ hi−1
+In addition, the output transformation Ω is deﬁned with the
+same permutation P as f , and it is deﬁned by
+Ω(x) = truncn (P (x) ⊕ x)
+, where truncn represents the operation that discards all but
+the trailing n-bits of x.
+The number of rounds, denoted by r, and initial values,
+denoted by ivn are deﬁned as shown in Tab. (I) and Tab. (II).
+
+TABLE I
+N UMBER OF ROUNDS
+Permutations
+
+Digest sizes
+
+Recommended
+
+P512 and Q512
+
+8-256
+
+10
+
+P1024 and Q1024
+
+264-512
+
+14
+
+TABLE II
+I NITAIL VALUES
+n
+
+ivn
+
+224
+
+00 . . . 00 00 e0
+
+256
+
+00 . . . 00 01 00
+
+384
+
+00 . . . 00 01 80
+
+512
+
+00 . . . 00 20 00
+
+In addition, the padding function pad(x) is deﬁned to obtain
+the adequate message block length, which is a multiple of
+l, from an input x of length N (> 0)-bits. The function
+concatenate x with the bit 1 and w numbers of 0’s, where
+w = −N − 65 (mod l). Finally, it appends a 64-bit representation of (N + w + 65)/l and returns the bit string.
+
+C. Design of the permutations
+The permutations P and Q in the compression function f
+are inspired by the Rijndael block cipher [3]; i.e. there is
+a round, and four round transformations, called AddRoundConstant, SubBytes, ShiftBytes, MixBytes, are deﬁned for
+each permutation. A round R is expressed by the composite
+mapping as R = MixBytes ◦ ShiftBytes ◦ SubBytes ◦
+AddRoundConstant1 .
+Grøstl uses the internal block size properly depending on
+the variants such that 8 × 8 for the short variants and 8 × 16
+for the large variants. Since the block size is not the same as
+the AES, the block in the round transformations is extended
+as necessary. For convenience, we use the subscriptions to
+distinguish the variants by following the manner in [1].
+1) AddRoundConstant: The AddRoundConstant takes a
+state as input and performs an exclusive-or (XOR) operation with a round constant C[i], which is deﬁned for
+P512 , Q512 , P1024 and Q1024 independently. For example, constants for the short variants are designed as follows:
+
+
+00 ⊕ i 10 ⊕ i 20 ⊕ i · · · 70 ⊕ i
+
+
+
+
+00
+00
+···
+00 
+ 00
+
+
+P512 : C[i] =  .
+..
+..
+..
+.. 
+ ..
+.
+.
+.
+. 
+
+
+
+
+Q512
+
+:
+
+00
+
+00
+
+00
+
+···
+
+00
+
+ff
+..
+.
+
+ff
+..
+.
+
+ff
+..
+.
+
+···
+..
+.
+
+ff
+..
+.
+
+
+
+
+C[i] = 
+
+ ff
+ff
+ff
+
+f f ⊕ i ef ⊕ i df ⊕ i
+
+···
+···
+
+
+
+
+
+
+
+
+ff 
+
+8f ⊕ i
+
+These constants are used to update a state A by taking XOR
+as A = A ⊕ C[i].
+2) ShiftBytes/ShiftBytesWide: The ShiftBytes and ShiftBytesWide are used for the short variants and the large
+variants, respectively. They perform a cyclic shift operation
+based on the well-deﬁned shift values, which differ in the
+permutations P and Q.
+More precisely, the respective shift amount in P and Q is
+set to be different and is set to have an optimal diffusion.
+Let σ = [σ1 , σ2 , . . . , σ7 ] be a list of shift values consisting
+of distinct integers so that it becomes harder to line up the
+differences or any other pattern in P and Q or to cancel each
+other.
+This property is achieved by using a different slope
+for P and Q. For example, ShiftBytes in P512 is deﬁned
+by σ = [0, 1, 2, 3, 4, 5, 6, 7] and that in Q512 is σ =
+[1, 3, 5, 7, 0, 2, 4, 6]. Both are known to be optimal for diffusion
+after two rounds.
+3) SubBytes: The SubBytes is used as a mapping that
+substitutes each byte in its input state with another byte by
+referring to a substitution box (s-box).
+1 It is noted that ShiftBytesWide is used instead of ShiftBytes for the longer
+instance
+
+The design of its s-box is the same as Rijndael’s one, and
+the concrete s-box for Grøstl can be available in Appendix B
+in [1]. Literary, the functions are described as ai,j ← S(ai,j )
+for an input byte ai,j in the input state and the s-box S, where
+i and j are iterators of the state matrix.
+4) MixBytes: The MixBytes is designed by following the
+wide trail strategy; that is, the transformation is based on an
+error-correcting code with the maximum distance separable
+(MDS) property. Although there are many MDS codes, Grøstl
+adopts the MDS matrix B = circ(02, 02, 03, 04, 05, 03, 05, 07)
+over F256 for the efﬁciency of implementations. It is noted
+that circ(02, 02, 03, 04, 05, 03, 05, 07) represents the circulant
+matrix.
+Since the ﬁeld F256 is constructed by an irreducible polynomial x8 + x4 + x3 + x + 1 in the same manner as the AES,
+the MixBytes transforms the input state A by performing the
+matrix multiplication together with B.
+III. D ESIGN OF MATRIX
+In this section, we propose a variant of Grøstl using a
+Mersenne prime and tower of ﬁelds.
+A. Background of the approach
+Basically, our approach follows the design criteria of Grøstl ,
+however, there is a slight difference that comes from the tradeoff between implementations using lookup tables (LUTs) and
+actual computations. Since Grøstl deals with state blocks as a
+matrix consisting of bytes that are isomorphic to the extension
+ﬁeld F28 , its implementation strategy is often based on LUTs
+for ease and efﬁciency. On the other hand, LUTs consume
+many resources rather than actual computations.
+It is noted that our approach inherits the design of the
+compression function f and the output transformation Ω as it
+is. The main contribution of this paper is to introduce the novel
+structure of the state matrix for Grøstl and round operations
+on it.
+In this context, we propose to regard an extension ﬁeld
+element as a state matrix and reconﬁgure Grøstl that can
+be implemented with optimal computations. We refer to this
+structure as Mixed-basis Architecture using Towering Field
+Representations for Extendable Grøstl State Blocks (MATRIX).
+B. Design principle
+Let p be a prime number and let mc and mr be positive
+integers. A tower of ﬁelds we used for the construction is
+denoted by F(pmc )mr .
+For a characteristic ﬁeld Fp , the ﬁrst extension ﬁeld of
+degree mc is deﬁned by a cyclotomic polynomial so that the
+ﬁeld elements are represented by a GNB. The second extension
+ﬁeld is endowed by an irreducible polynomial of degree mr
+over Fpmc , where the basis of F(pmc )mr is assumed to be a
+polynomial basis.
+Then, an element in F(pmc )mr is written by a linear combination of the mixture of the normal basis and the polynomial
+basis. We regard this extension ﬁeld element as mr ×mc matrix
+
+bits of the compression function f , and the difference results
+in their block sizes. In other words, since each entry in the
+state matrix in Grøstl is 8-bits, the block sizes of the short and
+the large variants are deﬁned by 8 × 8 and 8 × 16, respectively.
+Tab. (III) shows the minimum sets to obtain a GNB for
+Fpmc . As seen from the table, mc = 4 has the smallest
+h, and this would be the best option since h dominates the
+number of component terms to construct a normal element
+via Gauss periods. This means that the multiplicative operation
+over Fpmc becomes inefﬁcient in proportion to the increment
+of the value of h.
+TABLE III
+T HE MINIMUM SETS TO OBTAIN A GNB FOR Fpmc
+
+Fig. 2. An extension ﬁeld element as a state matrix
+
+whose entries are Fp elements and use it to construct a variant
+of Grøstl .
+More formally, the variant is designed as follows. Let h
+be a positive integer such that hmc + 1 is a distinct prime
+against p and let β be a root of a cyclotomic polynomial (or
+hmc
+we say all one polynomial)
+Φr (x) = x}
++ . . . + 1. A GNB
+{
+p
+pmc −1
+is then obtained as α, α , . . . , α
+for a normal element
+∑h−1 di
+α = i=0 β h . The set of coefﬁcients of each element in this
+extension ﬁeld is dealt with as a column vector of the state
+matrix.
+In the same way, a row vector of the state matrix is
+represented by a basis over Fpmc ; that is, the i-th row vector
+is composed of i-th coefﬁcients of the corresponding column
+vectors. The difference is that the basis is a polynomial basis
+consisting of a root of an irreducible polynomial over Fpmc .
+Let g(x) be an irreducible polynomial of degree mr over
+Fpmc and let γ denote a root of g(x). Then, the ﬁeld F(pmc )mr
+is isomorphic to Fpmc [x]/g(x) and the elements in there are
+represented by a linear combination of Fpmc -elements and the
+powers of γ.
+This towering structure allows us to view F(pmc )mr -element
+as shown in Fig. 2, where ci,j is an Fp -element.
+C. Optimal instances of MATRIX
+Here, we consider an optimal design of the proposed
+structure. Considering the ease of implementation of modular
+arithmetic and the architecture of modern integer data types,
+we think that Mersenne primes such as 27 − 1, 231 − 1, and
+2127 − 1 are reasonable candidates. In addition, recall from
+Sec. (II-A), GNBs have to satisfy the conditions concerning a
+prime number and an extension degree. Those conditions can
+be one of the drawbacks if one cannot ﬁnd a superior pair of
+p, mc , and Φr .
+More precisely, Grøstl has the short and large variants,
+which are distinguished by the length l of internal in-and-out
+
+p
+
+mc
+
+h
+
+27 − 1
+
+4
+
+1
+
+27 − 1
+
+8
+
+11
+
+27 − 1
+
+16
+
+6
+
+231 − 1
+
+4
+
+1
+
+231 − 1
+
+8
+
+5
+
+231 − 1
+
+16
+
+12
+
+2127 − 1
+
+4
+
+1
+
+2127 − 1
+
+8
+
+11
+
+2127 − 1
+
+16
+
+7
+
+Therefore, the block size of the proposed method is preferable to be 4 × 4 since Rijndael’s block design and the round
+operations can be importable under these settings. Regarding
+the short and large variants in Grøstl , we propose to switch
+the characteristic ﬁeld to make the internal bit length l ﬂexible.
+In this context, the polynomials to deﬁne F(pmc )mr are
+ideal to be selected as a cyclotomic polynomial Φ5 (x) and
+an irreducible polynomial of form x4 − θ for the efﬁciency of
+computations, where θ is a quadratic non residue over Fpmc .
+D. Round operations for an optimal MATRIX instance
+For a prime p = 27 − 1, 231 − 1, or 2127 − 1, consider the
+4 × 4 matrix whose entries are elements in Fp . The round
+operations for this matrix are deﬁned as follows:
+• AddRoundConstant uses round constants C[i] of P and
+Q in the compression function f which are deﬁned as
+follows:
+
+
+00 ⊕ i 10 ⊕ i 20 ⊕ i 30 ⊕ i
+
+
+
+
+00
+00
+00 
+ 00
+
+P : C[i] = 
+..
+..
+.. 
+ ..
+
+ .
+.
+.
+.
+
+
+00
+00
+00
+00
+
+
+ff
+ff
+ff
+ff
+
+
+..
+..
+.. 
+ ..
+ .
+.
+.
+. 
+
+Q : C[i] = 
+
+
+
+ ff
+f
+f
+f
+f
+f
+f
+
+
+f f ⊕ i ef ⊕ i df ⊕ i cf ⊕ i
+
+ShiftBytes operates a cyclic shift as deﬁned in the Rijndael; that is, an i-th row is cyclically left-shifted.
+• SubBytes uses an inverse operation and an afﬁne transformation as the Rijndael does; however, it differs in the
+sense that the calculation is conducted for the entire state
+matrix. The actual operations
+for an i-th state matrix,
+∑m
+r −1
+denoted by F(pmc )mr ∋ a = i=0
+ai γ i for ai ∈ Fpmc ,
+are as follows:
+1) Calculate the inverse of a which can be endowed by
+using the Itoh-Tsujii algorithm [15] and the norm of
+a as shown in Eq. (1).
+2) Apply an afﬁne transform to the resultant element
+a−1 .
+3
+∏
+mc i
+1
+−1
+(1)
+a =
+a(p )
+NF(pmc )mr /Fpmc (a) i=1
+•
+
+, where NF(pmc )mr /Fpmc (x) shows the norm function for x ∈ F(pmc )mr .
+It is noted that since a normal basis allows us to conduct
+the Frobenius-endomorphism map without an actual computation by a coefﬁcient shift, the norm calculation can be
+simpliﬁed rather than using a polynomial basis for Fpmc .
+In addition, [16] can provide an efﬁcient multiplication
+over Fp4 compared to a Karatsuba-based approach.
+• MixBytes is expected to map elements to have optimal
+diffusion, and this is originally achieved by a maximum
+distance separable (MDS) matrix. Since the MixBytes
+in the Rijndael can be dealt with as (8, 4, 5) ReedSolomon (RS) codes, previous research concerning RScodes with a Mersenne prime can be reused. Considering
+the efﬁciency of the modular arithmetic with a mersenne
+prime, Vandermonde-RS code can be a suitable option
+for the proposed method.
+E. Open problems
+Several unsolved problems remain in the proposed construction, both theoretically and practically. For example,
+ﬁnding a practical instance of the MixBytes, which means
+the exploration of an ideal MDS matrix, is essential for the
+proposed method. In other words, although we can explore
+candidates based on the traditional construction scheme of the
+RS codes, an optimal matrix for the MixBytes is not clear.
+In addition, since a sufﬁcient initial vector and the number
+of rounds still have not been well discussed by taking into
+account the cryptoanalysis for the proposed method, it must
+be taken into account in further development. These problems
+remain open.
+IV. C ONCLUSION
+In this paper, we introduced a technique to represent a state
+matrix in Grøstl using a tower of ﬁelds over a prime ﬁeld.
+Especially, since a Mersenne prime allows us to implement a
+modular operation with low computational costs and some of
+them are approximately equal to the size of modern integer
+data types, we adopted it and proposed to build a tower of
+ﬁelds using a GNB and a polynomial basis.
+
+In addition, the proposed structure requires modifying the
+details of the round operations in Grøstl , and the direction
+of the approach was introduced. However, the more detailed
+structure of these operations could not be covered due to the
+page limitations. Therefore, we declared some of them as open
+problems and would like to make advances in future work.
+ACKNOWLEDGMENT
+This work was partially supported by KAKENHI Grant-inAid for Early-Career Scientists (24K20773).
+R EFERENCES
+[1] P. Gauravaram, L. R. Knudsen, K. Matusiewicz, F. Mendel, C. Rechberger, M. Schläffer, and S. S. Thomsen, “Grøstl - a SHA-3 candidate,”
+Submission to NIST, Round 3, 2011. http://groestl.info
+[2] FIPS publications 197, “Advanced Encryption Standard (AES),” NIST,
+Gaithersburg, MD, USA, FIPS PUB 197, Nov. 2001. https://csrc.nist.
+gov/publications/ﬁps/ﬁps197/ﬁps-197.pdf
+[3] J. Daemen and V. Rijmen, “The Design of Rijndael: AES - The Advanced Encryption Standard,” Information Security and Cryptography.
+Berlin, Germany: Springer-Verlag, 2002.
+[4] G. Kaur, V. S. Nayak, D. Dey, and S. K. Pal, “Modiﬁed Grøstl: An
+Efﬁcient Hash Function,” in Advances in Computer Science, Engineering & Applications, D. Wyld, J. Zizka, and D. Nagamalai, Eds. Berlin,
+Heidelberg: Springer, pp. 823-834, 2012.
+[5] M. M. Rao, K. Latif, A. Aziz, and A. Mahboob, “Efﬁcient FPGA
+Implementation of Secure Hash Algorithm Grøstl – SHA-3 Finalist,”
+in Emerging Trends and Applications in Information Communication
+Technologies, B. S. Chowdhry, F. K. Shaikh, D. M. A. Hussain, and M.
+A. Uqaili, Eds. Berlin, Heidelberg: Springer, pp. 355-365, 2012.
+[6] X. Dong, S. Sun, D. Shi, F. Gao, X. Wang, and L. Hu, “Quantum
+Collision Attacks on AES-Like Hashing with Low Quantum Random
+Access Memories,” in ASIACRYPT 2020, vol. 12492, Springer, pp. 727757, 2020.
+[7] X. Dong, J. Guo, S. Li, and P. Pham, “Triangulating Rebound Attack on
+AES-like Hashing,” in CRYPTO 2022, vol. 13507, Springer, pp. 94-124,
+2022.
+[8] Z. Bao, J. Guo, S. Li, and P. Pham, “Automatic Quantum Multi-collision
+Distinguishers and Rebound Attacks with Triangulation Algorithm,” in
+ACISP 2024, Springer, pp. 24-43, 2024.
+[9] R. Lidl and H. Niederreiter, “Introduction to Finite Fields and Their
+Applications,” Cambridge University Press, New York, NY, 1986.
+[10] R. C. Mullin, I. M. Onyszchuk, S. A. Vanstone, and R. M. Wilson,
+“Optimal normal bases in GF(pn ), Discrete Appl. Math., vol. 22, no.
+2, pp. 149–161, Feb. 1989.
+[11] S. Gao, J. von zur Gathen, and D. Panario, “Gauss periods: orders
+and cryptographical applications,” Math. Comput., vol. 67, no. 221, pp.
+343–352, Jan. 1998.
+[12] S. Gao, “Abelian groups, Gauss periods, and normal bases,” Finite Fields
+Appl., vol. 7, no. 1, pp. 149–161, Jan. 2001.
+[13] C. Lee, “Concurrent error detection and correction in Gaussian normal
+basis multiplier over GF(2m ),” IEEE Trans. Comput., vol. 58, no. 10,
+pp. 1355–1367, Oct. 2009.
+[14] K. Nekado, Y. Nogami, H. Kato, and Y. Morikawa, “Cyclic vector
+multiplication algorithm and existence probability of Gauss period
+normal basis,” IEICE Trans. Fundamentals, vol. E94-A, no. 1, pp. 172179, Jan. 2011.
+[15] T. Itoh and S. Tsujii, ”A fast algorithm for computing multiplicative
+inverses in GF(2m ) using normal bases,” Information and Computation,
+vol. 78, no. 3, pp MediumResearchGate. 171-177, 1988.
+[16] Y. Kodera, S. Duquesne, and Y. Nogami, “Multiplication and squaring in
+cubic and quartic extensions for pairing based cryptography,” in Finite
+Fields and their Applications: Proceedings of Fq14, J. A. Davis, Ed.
+Berlin, Germany: De Gruyter, 2020, pp. 71-86.
+
+

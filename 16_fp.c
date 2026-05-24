@@ -17,6 +17,13 @@ static inline uint32_t reduce_mersenne(uint64_t x) {
     return result;
 }
 
+static inline uint32_t reduce_mod(uint64_t x) {
+    volatile uint32_t p = P_PRIME;
+    uint64_t mod = x % p;
+    uint32_t result = (uint32_t)mod;
+    return result;
+}
+
 // 初期化
 void fp_init(fp_t *X){
     X->x0 = 0;
@@ -35,6 +42,14 @@ void fp_printf(const fp_t *X){
 // 代入
 void fp_set(fp_t *S, const fp_t *X){
     S->x0 = X->x0;
+}
+
+void fp_set_zero(fp_t *S){
+    S->x0 = 0;
+}
+
+void fp_set_ui(fp_t *S, uint32_t x){
+    S->x0 = x;
 }
 
 int fp_is_equal(const fp_t *X, const fp_t *Y){
@@ -87,6 +102,15 @@ void fp_add(fp_t *S, const fp_t *X, const fp_t *Y){
         S->x0 = sum;
 }
 
+void fp_add_plus(fp_t *S, const fp_t *X, const fp_t *Y){
+    fp_add_count++;
+    uint32_t sum = X->x0 + Y->x0;
+        if(sum >= P_PRIME){
+            sum -= P_PRIME;
+        }
+        S->x0 = sum;
+}
+
 // 差 S = X - Y
 void fp_sub(fp_t *S, const fp_t *X, const fp_t *Y){
     fp_sub_count++;
@@ -101,12 +125,33 @@ void fp_sub(fp_t *S, const fp_t *X, const fp_t *Y){
     }
 }
 
+void fp_sub_plus(fp_t *S, const fp_t *X, const fp_t *Y){
+    fp_sub_count++;
+    uint32_t x = X->x0;
+    uint32_t y = Y->x0;
+    
+    if (x < y) {
+        // 負になる場合は P を足してから引く (mod計算のテクニック)
+        S->x0 = x + P_PRIME - y;
+    } else {
+        S->x0 = x - y;
+    }
+}
+
 // 積 S = X * Y
 void fp_mul(fp_t *S, const fp_t *X, const fp_t *Y){
     fp_mul_count++;
     // 64bitで掛け算してから、31bitに落とす
     uint64_t prod = (uint64_t)X->x0 * (uint64_t)Y->x0;
     S->x0 = reduce_mersenne(prod);
+}
+
+// 積 S = X * Y
+void fp_mul_plus(fp_t *S, const fp_t *X, const fp_t *Y){
+    fp_mul_count++;
+    // 64bitで掛け算してから、31bitに落とす
+    uint64_t prod = (uint64_t)X->x0 * (uint64_t)Y->x0;
+    S->x0 = reduce_mod(prod);
 }
 
 // 逆数 S = 1 / X

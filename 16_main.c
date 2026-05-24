@@ -1,9 +1,65 @@
 #include "16_header.h"
 
 int main(void){
-    uint32_t p = P_MERSENNE;
-    printf("p : %u\n",p);
+    uint32_t p_mer = P_MERSENNE;
+    uint32_t p_pri = P_PRIME;
+    printf("p_mer : %u\n",p_mer);
+    printf("p_pri : %u\n",p_pri);
     printf("α : "); fp4_printf(&alpha);
+
+    state_t M; //MDS行列
+    state_init(&M);
+
+    //MDS行列をセット
+    fp_set_ui(&M.m[0][0], 1);
+    fp_set_ui(&M.m[0][1], 1);
+    fp_set_ui(&M.m[0][2], 2);
+    fp_set_ui(&M.m[0][3], 8);
+
+    fp_set_ui(&M.m[1][0], 8);
+    fp_set_ui(&M.m[1][1], 1);
+    fp_set_ui(&M.m[1][2], 1);
+    fp_set_ui(&M.m[1][3], 2);
+
+    fp_set_ui(&M.m[2][0], 2);
+    fp_set_ui(&M.m[2][1], 8);
+    fp_set_ui(&M.m[2][2], 1);
+    fp_set_ui(&M.m[2][3], 1);
+
+    fp_set_ui(&M.m[3][0], 1);
+    fp_set_ui(&M.m[3][1], 2);
+    fp_set_ui(&M.m[3][2], 8);
+    fp_set_ui(&M.m[3][3], 1);
+
+    state_t S,T,M_new;
+    state_init(&S);
+    state_init(&T);
+    state_init(&M_new);
+
+    state_set_zero(&S);
+    state_print(&S);
+
+    matrix_add_round_constant_P(&T,&S,1);
+    matrix_add_round_constant_Q(&M_new,&S,1);
+
+    // matrix_shiftbytes_P(&S,&M);
+    // matrix_shiftbytes_Q(&T,&M);
+
+    // matrix_subbytes(&M_new,&M);
+
+    printf("T : \n");
+    state_print(&T);
+    
+    printf("M_new : \n");
+    state_print(&M_new);
+
+    state_clear(&S);
+    state_clear(&M);
+    state_clear(&T);
+    state_clear(&M_new);
+
+    return 0;
+}
 
     // fp4_t A, B, C, D, E, F, One, Zero;
     // fp16_t A16, B16, C16, D16, E16, One16, Beta16, Alpha16, inv16, res16, A16_saved;
@@ -249,35 +305,37 @@ int main(void){
     // printf("A16*1/A16 = "); fp16_printf(&res16);
 
 
-    int iters = 100;
-    bench_fp_add_avg(iters, 1000000);
-    bench_fp_sub_avg(iters, 1000000);
-    bench_fp_mul_avg(iters, 1000000);
+    // int iters = 100;
+    // bench_fp_add_avg(iters, 1000000);
+    // bench_fp_sub_avg(iters, 1000000);
+    // bench_fp_mul_avg(iters, 1000000);
+    // bench_fp_add_plus_avg(iters, 1000000);
+    // bench_fp_sub_plus_avg(iters, 1000000);
+    // bench_fp_mul_plus_avg(iters, 1000000);
 
-    // --- Benchmark fp4_mul ---
-    bench_fp4_mul_avg(iters, 1000000);
+    // //--- Benchmark fp4_mul ---
+    // bench_fp4_mul_avg(iters, 1000000);
 
-    // --- Benchmark fp4_mul_new ---
-    bench_fp4_mul_new_avg(iters, 1000000);
+    // // --- Benchmark fp4_mul_new ---
+    // bench_fp4_mul_new_avg(iters, 1000000);
 
-    // --- Benchmark fp4_mul_karatsuba ---
-    bench_fp4_mul_karatsuba_avg(iters, 1000000);
+    // // --- Benchmark fp4_mul_karatsuba ---
+    // bench_fp4_mul_karatsuba_avg(iters, 1000000);
 
-    // --- Benchmark fp4_mul_slow ---
-    bench_fp4_mul_slow_avg(iters, 1000000);
+    // // --- Benchmark fp4_mul_slow ---
+    // bench_fp4_mul_slow_avg(iters, 1000000);
 
-    // --- Benchmark fp16_inv ---
-    int inv_iters = 100;
-    bench_fp16_inv_avg(inv_iters, 1000000);
+    // // --- Benchmark fp16_inv ---
+    // int inv_iters = 100;
+    // bench_fp16_inv_avg(inv_iters, 1000000);
 
-    // --- Benchmark fp16_inv_new ---
-    bench_fp16_inv_new_avg(inv_iters, 1000000);
+    // // --- Benchmark fp16_inv_new ---
+    // bench_fp16_inv_new_avg(inv_iters, 1000000);
 
-    // --- Benchmark fp16_inv_karatsuba ---
-    bench_fp16_inv_karatsuba_avg(inv_iters, 1000000);
+    // // --- Benchmark fp16_inv_karatsuba ---
+    // bench_fp16_inv_karatsuba_avg(inv_iters, 1000000);
 
-    // --- Benchmark fp16_inv_slow ---
-    bench_fp16_inv_slow_avg(inv_iters, 1000000);
+    // // --- Benchmark fp16_inv_slow ---
+    // bench_fp16_inv_slow_avg(inv_iters, 1000000);
 
-    return 0;
-}
+
