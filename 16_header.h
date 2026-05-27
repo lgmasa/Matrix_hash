@@ -14,6 +14,9 @@
 #define P_MERSENNE 2147483647 //p = 2^31-1
 #define P_PRIME 2147483629u //p = 2^31-19
 #define MATRIX_STATE_BYTES 64
+#define MATRIX_DIGEST_BYTES 32
+#define MATRIX_ROUNDS 10
+#define MATRIX_BLOCK_BYTES 64 //1ブロックあたりのbyte数
 
 // from fp.c
 typedef struct{
@@ -174,6 +177,20 @@ void matrix_state_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES], const state_t *S
 int matrix_trunc_tail_bytes(uint8_t *digest, size_t digest_len, const uint8_t full_state[MATRIX_STATE_BYTES]);
 int matrix_output_transform_digest(uint8_t *digest, size_t digest_len, const state_t *h, int rounds, const state_t *MDS);
 
+int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t block[MATRIX_STATE_BYTES], int rounds, const state_t *MDS);
+
+//padding関数
+size_t matrix_padded_length(size_t msg_len);
+int matrix_check_msg_len(size_t msg_len);
+void matrix_pad(uint8_t *out, size_t padded_len, const uint8_t *msg, size_t msg_len);
+
+//API関数
+int matrix_hash(uint8_t *digest, size_t digest_len, uint8_t *msg, size_t msg_len, int rounds, state_t *MDS);
+
+//テスト関数
+void test_matrix_hash_one_block(void);
+void print_bytes_hex(const uint8_t *buf, size_t len);
+void test_state_bytes_roundtrip(void);
 // void matrix_add_round_constant_p(state_t *S, uint8_t round);
 // void matrix_add_round_constant_q(state_t *S, uint8_t round);
 // void matrix_shiftbytes(state_t *S);

@@ -476,6 +476,8 @@ int matrix_output_transform_digest(uint8_t *digest, size_t digest_len, const sta
     int ok = matrix_trunc_tail_bytes(digest, digest_len, full_state);
 
     state_clear(&state_final);
+
+    return ok;
 }
 
 //4byte配列を32bitに変換
@@ -502,6 +504,249 @@ void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_STATE_BYTES]){
     }
 }
 
+//16進数を出力
+void print_bytes_hex(const uint8_t *buf, size_t len){
+    for (size_t i = 0; i < len; i++) {
+        printf("%02x", buf[i]);
+
+        // 4 byteごとに空白を入れる
+        if ((i + 1) % 4 == 0) {
+            printf(" ");
+        }
+
+        // 16 byteごとに改行する
+        if ((i + 1) % 16 == 0) {
+            printf("\n");
+        }
+    }
+
+    if (len % 16 != 0) {
+        printf("\n");
+    }
+}
+
+//1ブロック分のハッシュ処理をまとめる関数
+int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t block[MATRIX_STATE_BYTES], int rounds, const state_t *MDS){
+    state_t h;
+    state_t m;
+    state_t h_new;
+
+    if(digest == NULL || block == NULL || MDS == NULL){
+        return 0;
+    }
+
+    state_init(&h);
+    state_init(&m);
+    state_init(&h_new);
+
+    //初期値 h = IV
+    state_set_zero(&h);
+
+    // printf("h0 :\n");
+    // state_print(&h);
+
+    //64byteのブロック→状態行列 m
+    matrix_bytes_to_state(&m, block);
+
+    // printf("m :\n");
+    // state_print(&m);
+
+    //h_new = 圧縮関数(h,m)
+    matrix_compression(&h_new, &h, &m, rounds, MDS);
+
+    int ok = matrix_output_transform_digest(digest, digest_len, &h_new, rounds, MDS);
+
+    state_clear(&h);
+    state_clear(&m);
+    state_clear(&h_new);
+
+    return ok;
+}
+
+size_t matrix_padded_length(size_t msg_len){
+    size_t len = msg_len + 1 + 8;  //1:0x80、 8:メッセージ長を入れる領域
+    size_t rem = len % MATRIX_STATE_BYTES;
+
+    if(rem == 0){
+        return len;
+    }
+    return len + (MATRIX_STATE_BYTES - rem);
+}
+
+//メッセージ長の最大値を超えないかの確認
+int matrix_check_msg_len(size_t msg_len){
+    if (msg_len > UINT64_MAX / 8) {
+        return 0; // 長すぎる
+    }
+    return 1;
+}
+
+void matrix_pad(uint8_t *out, size_t padded_len, const uint8_t *msg, size_t msg_len){
+    //まず全体を0で埋める
+    memset(out, 0, padded_len);
+
+    //元のメッセージを先頭にコピー
+    memcpy(out, msg, msg_len);
+
+    //メッセージの末尾の隣に0x80を追加
+    out[msg_len] = 0x80;
+
+    //最後の8byteにメッセージ長をbit単位で入れる
+    uint64_t bit_len = (uint64_t)msg_len * 8;
+
+    out[padded_len -8] = (uint8_t)(bit_len >> 56);
+    out[padded_len -7] = (uint8_t)(bit_len >> 48);
+    out[padded_len -6] = (uint8_t)(bit_len >> 40);
+    out[padded_len -5] = (uint8_t)(bit_len >> 32);
+    out[padded_len -4] = (uint8_t)(bit_len >> 24);
+    out[padded_len -3] = (uint8_t)(bit_len >> 16);
+    out[padded_len -2] = (uint8_t)(bit_len >> 8);
+    out[padded_len -1] = (uint8_t)(bit_len);
+}
+
+
+int matrix_hash(uint8_t *digest, size_t digest_len, uint8_t *msg, size_t msg_len, int rounds, state_t *MDS){
+    
+    //ここでエラーの原因になりそうなことをチェックしておく
+    if(digest == NULL || msg == NULL || MDS == NULL){
+        return 0;
+    }
+    if(digest_len > MATRIX_STATE_BYTES){
+        return 0;
+    }
+    if(!matrix_check_msg_len(msg_len)){
+        return 0;
+    }
+
+    //パディングを入れた後のバイト長を求める
+    size_t padded_len = matrix_padded_length(msg_len);
+
+    uint8_t *padded = malloc(padded_len); //メモリ確保
+    if(padded == NULL){
+        return 0;
+    }
+
+    //パディングを入れる
+    matrix_pad(padded, padded_len, msg, msg_len);
+
+    state_t h;
+    state_t m;
+    state_t h_new;
+
+    state_init(&h);
+    state_init(&m);
+    state_init(&h_new);
+
+    state_set_zero(&h);
+
+    size_t num_blocks = padded_len / MATRIX_BLOCK_BYTES;  //もしpadded_len = 128なら、64byteのブロックが128/64=2つある=num_blocks
+
+    for(size_t b = 0; b < num_blocks; b++){
+        const uint8_t *block = padded + b * MATRIX_BLOCK_BYTES; //&padded[b * MATRIX_BLOCK_BYTES]と同義
+
+        //1ブロック分を行列に変換
+        matrix_bytes_to_state(&m, block);
+
+        //1ブロック分をラウンド処理にかける
+        matrix_compression(&h_new, &h, &m, rounds, MDS);
+
+        //状態行列を更新
+        state_copy(&h, &h_new);
+    }
+
+    //全ブロックのラウンド処理が終わって出てきた状態行列を使って、最終的な出力を求める
+    int ok = matrix_output_transform_digest(digest, digest_len, &h, rounds, MDS);
+
+    state_clear(&h);
+    state_clear(&m);
+    state_clear(&h_new);
+
+    free(padded);
+
+    return ok;
+}
+
+// void test_matrix_hash_one_block(void)
+// {
+//     uint8_t block[MATRIX_STATE_BYTES] = {0};
+//     uint8_t digest[32];
+
+//     /*
+//       分かりやすい入力を入れる
+//       block = 0,1,2,...,63
+//     */
+//     for (int i = 0; i < MATRIX_STATE_BYTES; i++) {
+//         block[i] = (uint8_t)i;
+//     }
+
+//     int ok = matrix_hash_one_block(
+//         digest,
+//         32,              // 256 bit digest
+//         block,
+//         MATRIX_ROUNDS,
+//         &MDS
+//     );
+
+//     if (!ok) {
+//         printf("matrix_hash_one_block failed\n");
+//         return;
+//     }
+
+//     printf("digest = ");
+//     matrix_print_digest_hex(digest, 32);
+// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void test_state_bytes_roundtrip(void){
+    state_t S, T;
+    uint8_t buf[64];
+
+    state_init(&S);
+    state_init(&T);
+
+    state_random(&S);
+
+    printf("S:\n");
+    state_print(&S);
+
+    matrix_state_to_bytes_512(buf, &S);
+
+    printf("buf :\n");
+    print_bytes_hex(buf, 64);
+
+    matrix_bytes_to_state(&T, buf);
+
+    printf("T:\n");
+    state_print(&T);
+
+    if (state_equal(&S, &T)) {
+        printf("state -> bytes -> state: OK\n");
+    } else {
+        printf("state -> bytes -> state: NG\n");
+        printf("S:\n");
+        state_print(&S);
+        printf("T:\n");
+        state_print(&T);
+    }
+
+    state_clear(&S);
+    state_clear(&T);
+}
 
 
 

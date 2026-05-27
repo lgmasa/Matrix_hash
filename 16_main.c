@@ -7,56 +7,46 @@ int main(void){
     printf("p_pri : %u\n",p_pri);
     printf("α : "); fp4_printf(&alpha);
 
-    state_t M; //MDS行列
-    state_init(&M);
+    state_t MDS; //MDS行列
+    state_init(&MDS);
 
     //MDS行列をセット
-    fp_set_ui(&M.m[0][0], 1);
-    fp_set_ui(&M.m[0][1], 1);
-    fp_set_ui(&M.m[0][2], 2);
-    fp_set_ui(&M.m[0][3], 8);
+    fp_set_ui(&MDS.m[0][0], 1);
+    fp_set_ui(&MDS.m[0][1], 1);
+    fp_set_ui(&MDS.m[0][2], 2);
+    fp_set_ui(&MDS.m[0][3], 8);
 
-    fp_set_ui(&M.m[1][0], 8);
-    fp_set_ui(&M.m[1][1], 1);
-    fp_set_ui(&M.m[1][2], 1);
-    fp_set_ui(&M.m[1][3], 2);
+    fp_set_ui(&MDS.m[1][0], 8);
+    fp_set_ui(&MDS.m[1][1], 1);
+    fp_set_ui(&MDS.m[1][2], 1);
+    fp_set_ui(&MDS.m[1][3], 2);
 
-    fp_set_ui(&M.m[2][0], 2);
-    fp_set_ui(&M.m[2][1], 8);
-    fp_set_ui(&M.m[2][2], 1);
-    fp_set_ui(&M.m[2][3], 1);
+    fp_set_ui(&MDS.m[2][0], 2);
+    fp_set_ui(&MDS.m[2][1], 8);
+    fp_set_ui(&MDS.m[2][2], 1);
+    fp_set_ui(&MDS.m[2][3], 1);
 
-    fp_set_ui(&M.m[3][0], 1);
-    fp_set_ui(&M.m[3][1], 2);
-    fp_set_ui(&M.m[3][2], 8);
-    fp_set_ui(&M.m[3][3], 1);
+    fp_set_ui(&MDS.m[3][0], 1);
+    fp_set_ui(&MDS.m[3][1], 2);
+    fp_set_ui(&MDS.m[3][2], 8);
+    fp_set_ui(&MDS.m[3][3], 1);
 
-    state_t S,T,M_new;
-    state_init(&S);
-    state_init(&T);
-    state_init(&M_new);
+    uint8_t block[MATRIX_STATE_BYTES] = {0};
+    uint8_t digest[32];
+    uint8_t msg[] = "Hello World"; //文字列リテラル "Hello World" の各文字コードが uint8_t 配列に格納される
+    size_t msg_len = sizeof(msg) -1; //末尾のヌル文字\0も数えてしまい、1文字多くなってしまうから1を引く
 
-    state_set_zero(&S);
-    state_print(&S);
+    printf("MDS :\n");
+    state_print(&MDS);
 
-    matrix_add_round_constant_P(&T,&S,1);
-    matrix_add_round_constant_Q(&M_new,&S,1);
+    matrix_hash(digest, MATRIX_DIGEST_BYTES, msg, msg_len, MATRIX_ROUNDS, &MDS);
 
-    // matrix_shiftbytes_P(&S,&M);
-    // matrix_shiftbytes_Q(&T,&M);
+    printf("msg :\n");
+    printf("%s\n",msg);
+    print_bytes_hex(msg, 11);
 
-    // matrix_subbytes(&M_new,&M);
-
-    printf("T : \n");
-    state_print(&T);
-    
-    printf("M_new : \n");
-    state_print(&M_new);
-
-    state_clear(&S);
-    state_clear(&M);
-    state_clear(&T);
-    state_clear(&M_new);
+    printf("digest :\n");
+    print_bytes_hex(digest, MATRIX_DIGEST_BYTES);
 
     return 0;
 }
