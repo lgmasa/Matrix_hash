@@ -10,6 +10,9 @@ int main(void){
     state_t MDS; //MDS行列
     state_init(&MDS);
 
+    affine16_t AFF;
+    affine16_init(&AFF);
+
     //MDS行列をセット
     fp_set_ui(&MDS.m[0][0], 1);
     fp_set_ui(&MDS.m[0][1], 1);
@@ -31,6 +34,8 @@ int main(void){
     fp_set_ui(&MDS.m[3][2], 8);
     fp_set_ui(&MDS.m[3][3], 1);
 
+    affine16_set(&AFF);
+
     uint8_t block[MATRIX_STATE_BYTES] = {0};
     uint8_t digest[32];
     uint8_t msg[] = "Hello World"; //文字列リテラル "Hello World" の各文字コードが uint8_t 配列に格納される
@@ -39,7 +44,7 @@ int main(void){
     printf("MDS :\n");
     state_print(&MDS);
 
-    matrix_hash(digest, MATRIX_DIGEST_BYTES, msg, msg_len, MATRIX_ROUNDS, &MDS);
+    matrix_hash(digest, MATRIX_DIGEST_BYTES, msg, msg_len, MATRIX_ROUNDS, &MDS, &AFF);
 
     printf("msg :\n");
     printf("%s\n",msg);
@@ -47,6 +52,9 @@ int main(void){
 
     printf("digest :\n");
     print_bytes_hex(digest, MATRIX_DIGEST_BYTES);
+
+    state_clear(&MDS);
+    affine16_clear(&AFF);
 
     return 0;
 }

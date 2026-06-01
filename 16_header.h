@@ -124,6 +124,11 @@ typedef struct{
     fp_t m[4][4];
 } state_t;
 
+typedef struct{
+    fp_t A[16][16];
+    fp_t b[16];
+} affine16_t;
+
 void state_init(state_t *S);
 void state_set_zero(state_t *S);
 void state_random(state_t *S);
@@ -148,25 +153,32 @@ void matrix_shiftbytes_P(state_t *S_new, const state_t *S);
 void matrix_shiftbytes_Q(state_t *S_new, const state_t *S);
 
 //subbytes
-void matrix_subbytes(state_t *S_new, const state_t *S);
+void affine16_init(affine16_t *AFF);
+void affine16_clear(affine16_t *AFF);
+void state_to_vec16(fp_t v[16], const state_t *S);
+void vec16_to_state(state_t *S, const fp_t v[16]);
+void affine16_set(affine16_t *AFF);
+void affine16_apply_vec(fp_t y[16], const fp_t x[16], const affine16_t *AFF);
+void matrix_affine(state_t *S_new, const state_t *S, const affine16_t *AFF);
+void matrix_subbytes(state_t *S_new, const state_t *S, const affine16_t *AFF);
 
 //add round constant
 void matrix_add_round_constant_P(state_t *S_new, const state_t *S, int r);
 void matrix_add_round_constant_Q(state_t *S_new, const state_t *S, int r);
 
 //1ラウンドの処理をまとめる関数
-void matrix_round_P(state_t *S_new, const state_t *S, int r, const state_t *MDS);
-void matrix_round_Q(state_t *S_new, const state_t *S, int r, const state_t *MDS);
+void matrix_round_P(state_t *S_new, const state_t *S, int r, const state_t *MDS, const affine16_t *AFF);
+void matrix_round_Q(state_t *S_new, const state_t *S, int r, const state_t *MDS, const affine16_t *AFF);
 
 //ラウンド処理をrounds回行う関数
-void matrix_permutation_P(state_t *S_new, const state_t *S, int rounds, const state_t *MDS);
-void matrix_permutation_Q(state_t *S_new, const state_t *S, int rounds, const state_t *MDS);
+void matrix_permutation_P(state_t *S_new, const state_t *S, int rounds, const state_t *MDS, const affine16_t *AFF);
+void matrix_permutation_Q(state_t *S_new, const state_t *S, int rounds, const state_t *MDS, const affine16_t *AFF);
 
 //圧縮関数
-void matrix_compression(state_t *out, const state_t *h, const state_t *m, int rounds, const state_t *MDS);
+void matrix_compression(state_t *out, const state_t *h, const state_t *m, int rounds, const state_t *MDS, const affine16_t *AFF);
 
 //P(h) + h
-void matrix_output_transform(state_t *out, const state_t *h, int rounds, const state_t *MDS);
+void matrix_output_transform(state_t *out, const state_t *h, int rounds, const state_t *MDS, const affine16_t *AFF);
 
 //行列からビット列に変換
 static void fp4_to_bytes_128(uint8_t *out, const fp4_t *x);
@@ -175,9 +187,9 @@ void matrix_state_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES], const state_t *S
 
 //最終的な出力関数
 int matrix_trunc_tail_bytes(uint8_t *digest, size_t digest_len, const uint8_t full_state[MATRIX_STATE_BYTES]);
-int matrix_output_transform_digest(uint8_t *digest, size_t digest_len, const state_t *h, int rounds, const state_t *MDS);
+int matrix_output_transform_digest(uint8_t *digest, size_t digest_len, const state_t *h, int rounds, const state_t *MDS, const affine16_t *AFF);
 
-int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t block[MATRIX_STATE_BYTES], int rounds, const state_t *MDS);
+int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t block[MATRIX_STATE_BYTES], int rounds, const state_t *MDS, const affine16_t *AFF);
 
 //padding関数
 size_t matrix_padded_length(size_t msg_len);
@@ -185,7 +197,7 @@ int matrix_check_msg_len(size_t msg_len);
 void matrix_pad(uint8_t *out, size_t padded_len, const uint8_t *msg, size_t msg_len);
 
 //API関数
-int matrix_hash(uint8_t *digest, size_t digest_len, uint8_t *msg, size_t msg_len, int rounds, state_t *MDS);
+int matrix_hash(uint8_t *digest, size_t digest_len, const uint8_t *msg, size_t msg_len, int rounds, const state_t *MDS, const affine16_t *AFF);
 
 //テスト関数
 void test_matrix_hash_one_block(void);
