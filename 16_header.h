@@ -155,9 +155,18 @@ void matrix_shiftbytes_Q(state_t *S_new, const state_t *S);
 //subbytes
 void affine16_init(affine16_t *AFF);
 void affine16_clear(affine16_t *AFF);
+
+void affine16_print_A(const affine16_t *F);
+void affine16_print_b(const affine16_t *F);
+
 void state_to_vec16(fp_t v[16], const state_t *S);
 void vec16_to_state(state_t *S, const fp_t v[16]);
+
+void affine16_set_A(affine16_t *AFF);
+void affine16_set_b(affine16_t *AFF);
 void affine16_set(affine16_t *AFF);
+//Aが正則行列なら1、特異なら0
+int affine16_is_regular(const affine16_t *AFF); 
 void affine16_apply_vec(fp_t y[16], const fp_t x[16], const affine16_t *AFF);
 void matrix_affine(state_t *S_new, const state_t *S, const affine16_t *AFF);
 void matrix_subbytes(state_t *S_new, const state_t *S, const affine16_t *AFF);
@@ -198,6 +207,10 @@ void matrix_pad(uint8_t *out, size_t padded_len, const uint8_t *msg, size_t msg_
 
 //API関数
 int matrix_hash(uint8_t *digest, size_t digest_len, const uint8_t *msg, size_t msg_len, int rounds, const state_t *MDS, const affine16_t *AFF);
+
+//スループット計測関数
+double now_sec(void);
+void benchmark_matrix_hash(size_t msg_len, int iterations, const state_t *MDS, const affine16_t *AFF);
 
 //テスト関数
 void test_matrix_hash_one_block(void);

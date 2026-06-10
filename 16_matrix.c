@@ -215,6 +215,24 @@ void affine16_clear(affine16_t *AFF){
     }
 }
 
+void affine16_print_A(const affine16_t *F){
+    for (int i = 0; i < 16; i++) {
+        for (int j = 0; j < 16; j++) {
+            printf("%u ", F->A[i][j].x0);
+        }
+        printf("\n");
+    }
+}
+
+void affine16_print_b(const affine16_t *F)
+{
+    for (int i = 0; i < 16; i++) {
+        printf("%u ", F->b[i].x0);
+    }
+
+    printf("\n");
+}
+
 //4*4を16*1に変換する関数
 void state_to_vec16(fp_t v[16], const state_t *S){
     int idx = 0;
@@ -239,6 +257,33 @@ void vec16_to_state(state_t *S, const fp_t v[16]){
     }
 }
 
+//Aに値をセットする関数
+void affine16_set_A(affine16_t *AFF)
+{
+    for (int i = 0; i < 16; i++) {
+        fp_set_zero(&AFF->b[i]);
+
+        for (int j = 0; j < 16; j++) {
+            fp_set_zero(&AFF->A[i][j]);
+        }
+    }
+
+    for (int i = 0; i < 16; i++) {
+        fp_set_ui(&AFF->A[i][i], 1);
+        fp_set_ui(&AFF->A[i][(i + 4) % 16], 1);
+        fp_set_ui(&AFF->A[i][(i + 5) % 16], 1);
+        fp_set_ui(&AFF->A[i][(i + 6) % 16], 1);
+        fp_set_ui(&AFF->A[i][(i + 7) % 16], 1);
+    }
+}
+
+void affine16_set_b(affine16_t *AFF)
+{
+    for (int i = 0; i < 16; i++) {
+        fp_set_ui(&AFF->b[i], i + 1);
+    }
+}
+
 //A,bをセットする関数(一旦Aは単位ベクトル、bは零ベクトルでセット)
 void affine16_set(affine16_t *AFF){
     for (int i = 0; i < 16; i++){
@@ -251,6 +296,78 @@ void affine16_set(affine16_t *AFF){
     for (int i = 0; i < 16; i++){
         fp_set_ui(&AFF->A[i][i], 1);
     }
+}
+
+//16*16行列Aが正則行列(逆行列を持つ)かどうかを判定する関数
+//素体F_p上でガウスの消去法による前進消去を行い、全ての列でピボットが立てば正則
+//正則なら1、特異(正則でない)なら0を返す
+int affine16_is_regular(const affine16_t *AFF){
+    fp_t M[16][16];
+
+    //Aをコピー(消去法で破壊的に変更するため)
+    for (int i = 0; i < 16; i++){
+        for (int j = 0; j < 16; j++){
+            fp_set(&M[i][j], &AFF->A[i][j]);
+        }
+    }
+
+    fp_t inv, factor, term, tmp;
+    fp_init(&inv);
+    fp_init(&factor);
+    fp_init(&term);
+    fp_init(&tmp);
+
+    int regular = 1;
+
+    for (int col = 0; col < 16; col++){
+        //col列で非零成分(ピボット)を持つ行をcol行以降から探す
+        int pivot = -1;
+        for (int row = col; row < 16; row++){
+            if (!fp_is_zero(&M[row][col])){
+                pivot = row;
+                break;
+            }
+        }
+
+        //ピボットが見つからない→この列は消去後すべて0→正則ではない
+        if (pivot == -1){
+            regular = 0;
+            break;
+        }
+
+        //ピボット行を対角位置(col行)に移動
+        if (pivot != col){
+            for (int j = 0; j < 16; j++){
+                fp_set(&tmp, &M[col][j]);
+                fp_set(&M[col][j], &M[pivot][j]);
+                fp_set(&M[pivot][j], &tmp);
+            }
+        }
+
+        //ピボットの逆元
+        fp_inv(&inv, &M[col][col]);
+
+        //col行より下の行のcol列成分を消去
+        for (int row = col + 1; row < 16; row++){
+            if (fp_is_zero(&M[row][col])) continue;
+
+            //factor = M[row][col] / M[col][col]
+            fp_mul(&factor, &M[row][col], &inv);
+
+            //row行 = row行 - factor * col行
+            for (int j = col; j < 16; j++){
+                fp_mul(&term, &factor, &M[col][j]);
+                fp_sub(&M[row][j], &M[row][j], &term);
+            }
+        }
+    }
+
+    fp_clear(&inv);
+    fp_clear(&factor);
+    fp_clear(&term);
+    fp_clear(&tmp);
+
+    return regular;
 }
 
 //xを16*1に変換した後に使う
@@ -286,7 +403,7 @@ void matrix_affine(state_t *S_new, const state_t *S, const affine16_t *AFF){
         fp_init(&y[i]);
     }
 
-    //逆元計算を終えたx(4*4行列)を16*1の行列に変換する
+    //逆元計算を終えたS(4*4行列)をx(16*1行列)に変換する
     state_to_vec16(x, S);
 
     //y=A*x+bを行う(yは16*1行列、Aは16*16行列、bは16*1行列)
@@ -477,7 +594,7 @@ void matrix_compression(state_t *out, const state_t *h, const state_t *m, int ro
     matrix_permutation_P(&p_out, &hm, rounds, MDS, AFF);
 
     //q_out = Q(m)
-    matrix_permutation_Q(&p_out, m, rounds, MDS, AFF);
+    matrix_permutation_Q(&q_out, m, rounds, MDS, AFF);
 
     // out = p_out + q_out + h
     state_add3(out, &p_out, &q_out, h);
@@ -602,7 +719,7 @@ static uint32_t load_u32_be(const uint8_t in[4]){
 }
 
 //メッセージブロック(64byte)を4*4行列に変換
-void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_STATE_BYTES]){ //block[i]には1buye
+void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_STATE_BYTES]){ //block[i]には1byte
     size_t pos = 0;
 
     for (int i = 0; i < 4; i++) {
@@ -731,7 +848,7 @@ int matrix_hash(uint8_t *digest, size_t digest_len, const uint8_t *msg, size_t m
         return 0;
     }
 
-    //パディングを入れた後のバイト長を求める
+    //パディングを入れた後のバイト長を求める（実際には長さを確保しただけでまだ入れてない）
     size_t padded_len = matrix_padded_length(msg_len);
 
     uint8_t *padded = malloc(padded_len); //メモリ確保
@@ -750,14 +867,19 @@ int matrix_hash(uint8_t *digest, size_t digest_len, const uint8_t *msg, size_t m
     state_init(&m);
     state_init(&h_new);
 
+    //状態行列の初期値を設定 h = 0x00000100
     state_set_zero(&h);
+    fp_set_ui(&h.m[3][3], 256);
+
+    // printf("h0 :\n");
+    // state_print(&h);
 
     size_t num_blocks = padded_len / MATRIX_BLOCK_BYTES;  //もしpadded_len = 128なら、64byteのブロックが128/64=2つある=num_blocks
 
     for(size_t b = 0; b < num_blocks; b++){
         const uint8_t *block = padded + b * MATRIX_BLOCK_BYTES; //&padded[b * MATRIX_BLOCK_BYTES]と同義
 
-        //1ブロック分を行列に変換
+        //1ブロック分を行列に変換（blockの開始位置から64byteだけ読み取って使う）
         matrix_bytes_to_state(&m, block);
 
         //1ブロック分をラウンド処理にかける

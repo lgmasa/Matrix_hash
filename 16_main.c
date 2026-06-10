@@ -4,7 +4,7 @@ int main(void){
     uint32_t p_mer = P_MERSENNE;
     uint32_t p_pri = P_PRIME;
     printf("p_mer : %u\n",p_mer);
-    printf("p_pri : %u\n",p_pri);
+    // printf("p_pri : %u\n",p_pri);
     printf("α : "); fp4_printf(&alpha);
 
     state_t MDS; //MDS行列
@@ -12,6 +12,20 @@ int main(void){
 
     affine16_t AFF;
     affine16_init(&AFF);
+    affine16_set_A(&AFF);
+    affine16_set_b(&AFF);
+    printf("A:\n");
+    affine16_print_A(&AFF);
+    printf("b:\n");
+    affine16_print_b(&AFF);
+
+    int A = affine16_is_regular(&AFF);
+
+    if (A){
+        printf("A is regular\n");
+    }else{
+        printf("A is not regular\n");
+    }
 
     //MDS行列をセット
     fp_set_ui(&MDS.m[0][0], 1);
@@ -34,7 +48,9 @@ int main(void){
     fp_set_ui(&MDS.m[3][2], 8);
     fp_set_ui(&MDS.m[3][3], 1);
 
-    affine16_set(&AFF);
+    // affine16_set(&AFF);
+
+    benchmark_matrix_hash(1024, 100, &MDS, &AFF);
 
     uint8_t block[MATRIX_STATE_BYTES] = {0};
     uint8_t digest[32];
@@ -48,7 +64,7 @@ int main(void){
 
     printf("msg :\n");
     printf("%s\n",msg);
-    print_bytes_hex(msg, 11);
+    // print_bytes_hex(msg, 11);
 
     printf("digest :\n");
     print_bytes_hex(digest, MATRIX_DIGEST_BYTES);
