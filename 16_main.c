@@ -50,24 +50,53 @@ int main(void){
 
     // affine16_set(&AFF);
 
-    benchmark_matrix_hash(1024, 100, &MDS, &AFF);
-
     uint8_t block[MATRIX_STATE_BYTES] = {0};
     uint8_t digest[32];
-    uint8_t msg[] = "Hello World"; //文字列リテラル "Hello World" の各文字コードが uint8_t 配列に格納される
+    uint8_t msg[] = "Hello"; //文字列リテラル "Hello World" の各文字コードが uint8_t 配列に格納される
     size_t msg_len = sizeof(msg) -1; //末尾のヌル文字\0も数えてしまい、1文字多くなってしまうから1を引く
 
     printf("MDS :\n");
     state_print(&MDS);
 
-    matrix_hash(digest, MATRIX_DIGEST_BYTES, msg, msg_len, MATRIX_ROUNDS, &MDS, &AFF);
-
     printf("msg :\n");
     printf("%s\n",msg);
     // print_bytes_hex(msg, 11);
 
+    //throughput_matrix_hash(msg, msg_len, 100, &MDS, &AFF);
+
+    matrix_hash(digest, MATRIX_DIGEST_BYTES, msg, msg_len, MATRIX_ROUNDS, &MDS, &AFF);
+
     printf("digest :\n");
     print_bytes_hex(digest, MATRIX_DIGEST_BYTES);
+
+    state_t S;
+    state_init(&S);
+    // state_set_zero(&S);
+
+    fp_set_ui(&S.m[0][0], 0);
+    fp_set_ui(&S.m[0][1], P_MERSENNE - 16);
+    fp_set_ui(&S.m[0][2], P_MERSENNE - 32);
+    fp_set_ui(&S.m[0][3], P_MERSENNE - 48);
+
+    fp_set_ui(&S.m[1][0], 0);
+    fp_set_ui(&S.m[1][1], 0);
+    fp_set_ui(&S.m[1][2], 0);
+    fp_set_ui(&S.m[1][3], 0);
+
+    fp_set_ui(&S.m[2][0], 0);
+    fp_set_ui(&S.m[2][1], 0);
+    fp_set_ui(&S.m[2][2], 0);
+    fp_set_ui(&S.m[2][3], 0);
+
+    fp_set_ui(&S.m[3][0], 0);
+    fp_set_ui(&S.m[3][1], 0);
+    fp_set_ui(&S.m[3][2], 0);
+    fp_set_ui(&S.m[3][3], 0);
+
+    printf("S :\n");
+    state_print(&S);
+
+    test_diffusion_P(&S, 0, 3, 1, &MDS, &AFF, MATRIX_ROUNDS);
 
     state_clear(&MDS);
     affine16_clear(&AFF);

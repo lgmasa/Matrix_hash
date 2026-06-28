@@ -504,14 +504,26 @@ void matrix_round_P(state_t *S_new, const state_t *S, int r, const state_t *MDS,
     //add round constant
     matrix_add_round_constant_P(&T1,S,r);
 
+    printf("after add round constant:\n");
+    state_print(&T1);
+
     //subbytes
     matrix_subbytes(&T2,&T1, AFF);
+
+    printf("after subbytes:\n");
+    state_print(&T2);
 
     //shiftbytes
     matrix_shiftbytes_P(&T3,&T2);
 
+    printf("after shiftbytes:\n");
+    state_print(&T3);
+
     //mixbytes
     matrix_mixbytes(S_new,&T3,MDS);
+
+    printf("after mixbytes:\n");
+    state_print(S_new);
 
     state_clear(&T1);
     state_clear(&T2);

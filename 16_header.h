@@ -211,6 +211,12 @@ int matrix_hash(uint8_t *digest, size_t digest_len, const uint8_t *msg, size_t m
 //スループット計測関数
 double now_sec(void);
 void benchmark_matrix_hash(size_t msg_len, int iterations, const state_t *MDS, const affine16_t *AFF);
+void throughput_matrix_hash(const uint8_t *msg, size_t msg_len, int iterations, const state_t *MDS, const affine16_t *AFF);
+
+//安全性評価関数
+int state_count_diff_components(const state_t *A, const state_t *B);
+void state_print_diff_map(const state_t *A, const state_t *B);
+void test_diffusion_P(const state_t *S, int diff_row, int diff_col, uint32_t diff_value, const state_t *MDS, affine16_t *AFF , int max_rounds);
 
 //テスト関数
 void test_matrix_hash_one_block(void);
