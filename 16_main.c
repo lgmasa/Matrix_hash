@@ -128,8 +128,8 @@ int main(void){
 
     // affine16_set(&AFF);
 
-    uint8_t block[MATRIX_STATE_BYTES] = {0};
-    uint8_t digest[32];
+    uint8_t block[MATRIX_BLOCK_BYTES] = {0};
+    uint8_t digest[MATRIX_DIGEST_BYTES];
     uint8_t msg[] = "Hello"; //文字列リテラル "Hello World" の各文字コードが uint8_t 配列に格納される
     size_t msg_len = sizeof(msg) -1; //末尾のヌル文字\0も数えてしまい、1文字多くなってしまうから1を引く
 
@@ -149,7 +149,7 @@ int main(void){
 
     // test_basic(MATRIX_ROUNDS, &MDS, &AFF);
 
-    uint8_t a[64], b[64], ha, hb;
+    uint8_t a[64], b[64], ha[DLEN], hb[DLEN];
     state_t S1, S2;
     state_init(&S1); state_init(&S2);
 
@@ -170,13 +170,13 @@ int main(void){
     printf("S2:\n");
     state_print(&S2);
 
-    matrix_hash(&ha, DLEN, a, 64, MATRIX_ROUNDS, &MDS, &AFF);
-    matrix_hash(&hb, DLEN, b, 64, MATRIX_ROUNDS, &MDS, &AFF);
+    matrix_hash(ha, DLEN, a, 64, MATRIX_ROUNDS, &MDS, &AFF);
+    matrix_hash(hb, DLEN, b, 64, MATRIX_ROUNDS, &MDS, &AFF);
 
     printf("ha :\n");
-    print_bytes_hex(&ha, MATRIX_DIGEST_BYTES);
+    print_bytes_hex(ha, MATRIX_DIGEST_BYTES);
     printf("hb :\n");
-    print_bytes_hex(&hb, MATRIX_DIGEST_BYTES);
+    print_bytes_hex(hb, MATRIX_DIGEST_BYTES);
 
     printf("%s\n", memcmp(&ha,&hb,DLEN)==0 ? "COLLISION" : "ok");
 

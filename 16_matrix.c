@@ -704,8 +704,8 @@ int matrix_trunc_tail_bytes(uint8_t *digest, size_t digest_len, const uint8_t fu
         return 0;
     }
 
-    size_t start = MATRIX_STATE_BYTES - digest_len;
-    memcpy(digest, full_state + start, digest_len); //digest_len =16なら、start = 48なので、full_state[16]~[63]を取り出す[0]が先頭、[MATRIX_STATE_BYTES]が末尾
+    // size_t start = MATRIX_STATE_BYTES - digest_len; //末尾のbit列を取り出す際には必要だが、現在は先頭256bitを取り出しているため不要
+    memcpy(digest, full_state, digest_len); //digest_len =16なら、start = 48なので、full_state[16]~[63]を取り出す[0]が先頭、[MATRIX_STATE_BYTES]が末尾
 
     return 1;
 }
@@ -739,25 +739,24 @@ int matrix_output_transform_digest(uint8_t *digest, size_t digest_len, const sta
 }
 
 //4byte配列を32bitに変換
-static uint32_t load_u32_be(const uint8_t in[4]){
-    return ((uint32_t)in[0] << 24)
-         | ((uint32_t)in[1] << 16)
-         | ((uint32_t)in[2] << 8)
-         | ((uint32_t)in[3]);
+static uint32_t load_u24_be(const uint8_t in[3]){
+    return ((uint32_t)in[0] << 16)
+         | ((uint32_t)in[1] << 8)
+         | ((uint32_t)in[2]);
 }
 
-//メッセージブロック(64byte)を4*4行列に変換
-void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_STATE_BYTES]){ //block[i]には1byte
+//メッセージブロック(48byte)を4*4行列に変換
+void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_BLOCK_BYTES]){ //block[i]には1byte
     size_t pos = 0;
 
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
-            uint32_t v = load_u32_be(block + pos); //block[0]~block[3]の値をvに格納→S->m[0][0]へ代入→block[4]~block[7]の値をvに格納→S->m[0][1]に...
+            uint32_t v = load_u24_be(block + pos); //block[0]~block[2]の値をvに格納→S->m[0][0]へ代入→block[3]~block[5]の値をvに格納→S->m[0][1]に...
             //mod pしてから行列に格納
-            v %= P_MERSENNE;
+            // v %= P_MERSENNE;
             fp_set_ui(&S->m[i][j], v);
 
-            pos += 4;
+            pos += 3;
         }
     }
 }
@@ -784,7 +783,7 @@ void print_bytes_hex(const uint8_t *buf, size_t len){
 }
 
 //1ブロック分のハッシュ処理をまとめる関数
-int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t block[MATRIX_STATE_BYTES], int rounds, const state_t *MDS, const affine16_t *AFF){
+int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t block[MATRIX_BLOCK_BYTES], int rounds, const state_t *MDS, const affine16_t *AFF){
     state_t h;
     state_t m;
     state_t h_new;
@@ -823,12 +822,12 @@ int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t bloc
 
 size_t matrix_padded_length(size_t msg_len){
     size_t len = msg_len + 1 + 8;  //1:0x80、 8:メッセージ長を入れる領域
-    size_t rem = len % MATRIX_STATE_BYTES;
+    size_t rem = len % MATRIX_BLOCK_BYTES;
 
     if(rem == 0){
         return len;
     }
-    return len + (MATRIX_STATE_BYTES - rem);
+    return len + (MATRIX_BLOCK_BYTES - rem);
 }
 
 //メッセージ長の最大値を超えないかの確認
@@ -901,7 +900,7 @@ int matrix_hash(uint8_t *digest, size_t digest_len, const uint8_t *msg, size_t m
     // printf("h0 :\n");
     // state_print(&h);
 
-    size_t num_blocks = padded_len / MATRIX_BLOCK_BYTES;  //もしpadded_len = 128なら、64byteのブロックが128/64=2つある=num_blocks
+    size_t num_blocks = padded_len / MATRIX_BLOCK_BYTES;  //もしpadded_len = 96なら、48byteのブロックが96/48=2つある=num_blocks
 
     for(size_t b = 0; b < num_blocks; b++){
         const uint8_t *block = padded + b * MATRIX_BLOCK_BYTES; //&padded[b * MATRIX_BLOCK_BYTES]と同義
@@ -936,7 +935,7 @@ int matrix_hash(uint8_t *digest, size_t digest_len, const uint8_t *msg, size_t m
  * ============================================================ */
  
 /* 前方宣言(16_header.h に無いもの) */
-void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_STATE_BYTES]);
+void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_BLOCK_BYTES]);
  
 /* 検算項目の番号 */
 enum {
