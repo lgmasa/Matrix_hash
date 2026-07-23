@@ -193,9 +193,10 @@ void matrix_output_transform(state_t *out, const state_t *h, int rounds, const s
 static void fp4_to_bytes_128(uint8_t *out, const fp4_t *x);
 void fp16_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES], const fp16_t *x);
 void matrix_state_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES], const state_t *S);
+void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_STATE_BYTES]);
 
 //最終的な出力関数
-int matrix_trunc_tail_bytes(uint8_t *digest, size_t digest_len, const uint8_t full_state[MATRIX_STATE_BYTES]);
+int matrix_trunc_head_bytes(uint8_t *digest, size_t digest_len, const uint8_t full_state[MATRIX_STATE_BYTES]);
 int matrix_output_transform_digest(uint8_t *digest, size_t digest_len, const state_t *h, int rounds, const state_t *MDS, const affine16_t *AFF);
 
 int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t block[MATRIX_STATE_BYTES], int rounds, const state_t *MDS, const affine16_t *AFF);
@@ -207,6 +208,9 @@ void matrix_pad(uint8_t *out, size_t padded_len, const uint8_t *msg, size_t msg_
 
 //API関数
 int matrix_hash(uint8_t *digest, size_t digest_len, const uint8_t *msg, size_t msg_len, int rounds, const state_t *MDS, const affine16_t *AFF);
+int matrix_hash_test(uint8_t *digest, size_t digest_len, const uint8_t *msg, size_t msg_len, int rounds, const state_t *MDS, const affine16_t *AFF);
+void matrix_selftest_reset(void);
+void matrix_selftest_report(void);
 
 //スループット計測関数
 double now_sec(void);

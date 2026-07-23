@@ -1,0 +1,5 @@
+blocks=4
+input_bits=2048
+samples=10000
+avg_ratio=0.50000
+max_dev=0.02370
