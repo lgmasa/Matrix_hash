@@ -65,8 +65,8 @@ fig.suptitle(f"MATRIX avalanche test   |   samples = {samples} per block,   "
              f"block counts = {blocks},   output = 256 bit,   rounds = 10")
 fig.tight_layout(rect=[0, 0, 1, 0.96])
 
-plt.savefig("avalanche_blocks.png", dpi=140, bbox_inches="tight")
-print("wrote avalanche_blocks.png")
+plt.savefig("avalanche_blocks.pdf", bbox_inches="tight")
+print("wrote avalanche_blocks.pdf")
 for b in blocks:
     m = read_meta(b)
     print(f"  blocks={b}: avg_ratio={m.get('avg_ratio')}, max_dev={m.get('max_dev')}")

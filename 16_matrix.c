@@ -656,35 +656,36 @@ static void fp4_to_bytes_128(uint8_t *out, const fp4_t *x){
 
 //fp4_to_bytes_128 は31ビット詰めでは使わない(残しても無害だが未使用警告が出る場合あり)
 
-//fp16の16要素(各31bit)を隙間なくMSBファーストで詰める。16*31=496bit=62byte、残り2byteは0埋め。
-void fp16_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES], const fp16_t *x){
-    //16個の31bit係数を所定の順序で集める
+//fp16の16要素(各FP_BITSbit)を隙間なくMSBファーストで詰める。16*FP_BITS bit = state_bytes*8 (常に8の倍数)。
+void fp16_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES_MAX], const fp16_t *x){
+    //16個のFP_BITSbit係数を所定の順序で集める
     const fp4_t *blk[4] = { &x->x0, &x->x1, &x->x2, &x->x3 };
     uint32_t vals[16];
     int idx = 0;
+    uint32_t mask = (FP_BITS >= 32) ? 0xffffffffu : ((1u << FP_BITS) - 1u);
     for(int i = 0; i < 4; i++){
-        vals[idx++] = blk[i]->x0.x0 & 0x7fffffffu;
-        vals[idx++] = blk[i]->x1.x0 & 0x7fffffffu;
-        vals[idx++] = blk[i]->x2.x0 & 0x7fffffffu;
-        vals[idx++] = blk[i]->x3.x0 & 0x7fffffffu;
+        vals[idx++] = blk[i]->x0.x0 & mask;
+        vals[idx++] = blk[i]->x1.x0 & mask;
+        vals[idx++] = blk[i]->x2.x0 & mask;
+        vals[idx++] = blk[i]->x3.x0 & mask;
     }
 
-    //MSBファーストで31bitずつ詰める
-    memset(out, 0, MATRIX_STATE_BYTES);
+    //MSBファーストでFP_BITSbitずつ詰める
+    memset(out, 0, state_bytes);
     size_t bitpos = 0;
     for(int e = 0; e < 16; e++){
         uint32_t v = vals[e];
-        for(int b = 30; b >= 0; b--){            //31bit、上位ビットから
+        for(int b = (int)FP_BITS - 1; b >= 0; b--){   //FP_BITSbit、上位ビットから
             if((v >> b) & 1u)
                 out[bitpos >> 3] |= (uint8_t)(0x80u >> (bitpos & 7));
             bitpos++;
         }
     }
-    //bitpos == 496。out[62], out[63] は memset により 0 のまま。
+    //bitpos == 16*FP_BITS == state_bytes*8 (16は8の倍数なので端数は出ない)
 }
 
 //行列からビット列(512bit)に変換
-void matrix_state_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES], const state_t *S){
+void matrix_state_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES_MAX], const state_t *S){
     fp16_t x;
     fp16_init(&x);
 
@@ -695,12 +696,12 @@ void matrix_state_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES], const state_t *S
 }
 
 //ビット列から任意のbyte数だけ取り出す関数
-int matrix_trunc_tail_bytes(uint8_t *digest, size_t digest_len, const uint8_t full_state[MATRIX_STATE_BYTES]){
+int matrix_trunc_tail_bytes(uint8_t *digest, size_t digest_len, const uint8_t full_state[MATRIX_STATE_BYTES_MAX]){
     if(digest == NULL || full_state == NULL){  //なぜdigest == NULLを確認？→NULLアドレスに書き込むとクラッシュするから
         return 0;
     }
 
-    if(digest_len > MATRIX_STATE_BYTES){
+    if(digest_len > state_bytes){
         return 0;
     }
 
@@ -713,13 +714,13 @@ int matrix_trunc_tail_bytes(uint8_t *digest, size_t digest_len, const uint8_t fu
 //Ω(h) = trunc_n(P(h) + h)
 int matrix_output_transform_digest(uint8_t *digest, size_t digest_len, const state_t *h, int rounds, const state_t *MDS, const affine16_t *AFF){
     state_t state_final;
-    uint8_t full_state[MATRIX_STATE_BYTES];
+    uint8_t full_state[MATRIX_STATE_BYTES_MAX];
 
     if(digest == NULL || h == NULL || MDS == NULL){
         return 0;
     }
 
-    if(digest_len > MATRIX_STATE_BYTES){
+    if(digest_len > state_bytes){
         return 0;
     }
 
@@ -738,25 +739,27 @@ int matrix_output_transform_digest(uint8_t *digest, size_t digest_len, const sta
     return ok;
 }
 
-//4byte配列を32bitに変換
-static uint32_t load_u24_be(const uint8_t in[3]){
-    return ((uint32_t)in[0] << 16)
-         | ((uint32_t)in[1] << 8)
-         | ((uint32_t)in[2]);
+//blockからbitpos位置よりnbits分をMSBファーストで読み出す(fp16_to_bytes_512のビットパックの逆演算)
+static uint32_t load_bits_be(const uint8_t *block, size_t bitpos, unsigned nbits){
+    uint32_t v = 0;
+    for(unsigned i = 0; i < nbits; i++){
+        size_t bp = bitpos + i;
+        int bit = (block[bp >> 3] >> (7 - (bp & 7))) & 1;
+        v = (v << 1) | (uint32_t)bit;
+    }
+    return v;
 }
 
-//メッセージブロック(48byte)を4*4行列に変換
-void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_BLOCK_BYTES]){ //block[i]には1byte
-    size_t pos = 0;
+//メッセージブロック(block_bytes byte)を4*4行列に変換
+void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_BLOCK_BYTES_MAX]){
+    size_t bitpos = 0;
 
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
-            uint32_t v = load_u24_be(block + pos); //block[0]~block[2]の値をvに格納→S->m[0][0]へ代入→block[3]~block[5]の値をvに格納→S->m[0][1]に...
-            //mod pしてから行列に格納
-            // v %= P_MERSENNE;
+            uint32_t v = load_bits_be(block, bitpos, load_bits); //load_bits < FP_BITS なので mod は実質不要だが安全のため通す
             fp_set_ui(&S->m[i][j], v);
 
-            pos += 3;
+            bitpos += load_bits;
         }
     }
 }
@@ -783,7 +786,7 @@ void print_bytes_hex(const uint8_t *buf, size_t len){
 }
 
 //1ブロック分のハッシュ処理をまとめる関数
-int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t block[MATRIX_BLOCK_BYTES], int rounds, const state_t *MDS, const affine16_t *AFF){
+int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t block[MATRIX_BLOCK_BYTES_MAX], int rounds, const state_t *MDS, const affine16_t *AFF){
     state_t h;
     state_t m;
     state_t h_new;
@@ -822,12 +825,12 @@ int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t bloc
 
 size_t matrix_padded_length(size_t msg_len){
     size_t len = msg_len + 1 + 8;  //1:0x80、 8:メッセージ長を入れる領域
-    size_t rem = len % MATRIX_BLOCK_BYTES;
+    size_t rem = len % block_bytes;
 
     if(rem == 0){
         return len;
     }
-    return len + (MATRIX_BLOCK_BYTES - rem);
+    return len + (block_bytes - rem);
 }
 
 //メッセージ長の最大値を超えないかの確認
@@ -863,24 +866,20 @@ void matrix_pad(uint8_t *out, size_t padded_len, const uint8_t *msg, size_t msg_
 
 int matrix_hash(uint8_t *digest, size_t digest_len, const uint8_t *msg, size_t msg_len, int rounds, const state_t *MDS, const affine16_t *AFF){
     
+    size_t n_bits = digest_len * 8;
+    if(!field_select_for_output(n_bits)) return 0;
     //ここでエラーの原因になりそうなことをチェックしておく
-    if(digest == NULL || msg == NULL || MDS == NULL){
-        return 0;
-    }
-    if(digest_len > MATRIX_STATE_BYTES){
-        return 0;
-    }
-    if(!matrix_check_msg_len(msg_len)){
-        return 0;
-    }
+    if(digest == NULL || msg == NULL || MDS == NULL) return 0;
+    if(digest_len > state_bytes) return 0;
+    if(!matrix_check_msg_len(msg_len)) return 0;
+    printf("p_mer : %u\n",P_MERSENNE);
+
 
     //パディングを入れた後のバイト長を求める（実際には長さを確保しただけでまだ入れてない）
     size_t padded_len = matrix_padded_length(msg_len);
 
     uint8_t *padded = malloc(padded_len); //メモリ確保
-    if(padded == NULL){
-        return 0;
-    }
+    if(padded == NULL) return 0;
 
     //パディングを入れる
     matrix_pad(padded, padded_len, msg, msg_len);
@@ -900,10 +899,10 @@ int matrix_hash(uint8_t *digest, size_t digest_len, const uint8_t *msg, size_t m
     // printf("h0 :\n");
     // state_print(&h);
 
-    size_t num_blocks = padded_len / MATRIX_BLOCK_BYTES;  //もしpadded_len = 96なら、48byteのブロックが96/48=2つある=num_blocks
+    size_t num_blocks = padded_len / block_bytes;  //もしpadded_len = 96なら、48byteのブロックが96/48=2つある=num_blocks
 
     for(size_t b = 0; b < num_blocks; b++){
-        const uint8_t *block = padded + b * MATRIX_BLOCK_BYTES; //&padded[b * MATRIX_BLOCK_BYTES]と同義
+        const uint8_t *block = padded + b * block_bytes; //&padded[b * MATRIX_BLOCK_BYTES]と同義
 
         //1ブロック分を行列に変換（blockの開始位置から64byteだけ読み取って使う）
         matrix_bytes_to_state(&m, block);
@@ -935,7 +934,7 @@ int matrix_hash(uint8_t *digest, size_t digest_len, const uint8_t *msg, size_t m
  * ============================================================ */
  
 /* 前方宣言(16_header.h に無いもの) */
-void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_BLOCK_BYTES]);
+void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_BLOCK_BYTES_MAX]);
  
 /* 検算項目の番号 */
 enum {
@@ -999,7 +998,7 @@ void matrix_selftest_report(void){
 /* (1) パディング検算 */
 static void dbg_check_padding(const uint8_t *padded, size_t padded_len,
                               const uint8_t *msg, size_t msg_len){
-    int len_ok = (padded_len % MATRIX_BLOCK_BYTES == 0) && (padded_len >= msg_len);
+    int len_ok = (padded_len % block_bytes== 0) && (padded_len >= msg_len);
     dbg_record(DBG_PADDING_LEN, len_ok);
     int prefix_ok = (memcmp(padded, msg, msg_len) == 0);
     dbg_record(DBG_PADDING_PREFIX, prefix_ok);
@@ -1113,7 +1112,7 @@ int matrix_hash_test(uint8_t *digest, size_t digest_len, const uint8_t *msg, siz
     if(digest == NULL || msg == NULL || MDS == NULL){
         return 0;
     }
-    if(digest_len > MATRIX_STATE_BYTES){
+    if(digest_len > state_bytes){
         return 0;
     }
     if(!matrix_check_msg_len(msg_len)){
@@ -1145,9 +1144,9 @@ int matrix_hash_test(uint8_t *digest, size_t digest_len, const uint8_t *msg, siz
 
     /* --- TEST 1: パディング --- */
     DBG_CHECK("padding length multiple of block",
-              (padded_len % MATRIX_BLOCK_BYTES) == 0,
+              (padded_len % block_bytes) == 0,
               "msg_len=%zu -> padded_len=%zu (%zu blocks)",
-              msg_len, padded_len, padded_len / MATRIX_BLOCK_BYTES);
+              msg_len, padded_len, padded_len / block_bytes);
     {
         /* 先頭が元メッセージと一致しているか */
         int head_ok = (memcmp(padded, msg, msg_len) == 0);
@@ -1236,7 +1235,7 @@ int matrix_hash_test(uint8_t *digest, size_t digest_len, const uint8_t *msg, siz
         state_clear(&s); state_clear(&p1); state_clear(&p2); state_clear(&q1);
     }
 
-    size_t num_blocks = padded_len / MATRIX_BLOCK_BYTES;
+    size_t num_blocks = padded_len / block_bytes;
 
     /* --- TEST 5: 圧縮関数 f(h,m)=P(h+m)+Q(m)+h を1ブロック目で検算 --- */
     {
@@ -1259,7 +1258,7 @@ int matrix_hash_test(uint8_t *digest, size_t digest_len, const uint8_t *msg, siz
     }
 
     for(size_t b = 0; b < num_blocks; b++){
-        const uint8_t *block = padded + b * MATRIX_BLOCK_BYTES;
+        const uint8_t *block = padded + b * block_bytes;
         matrix_bytes_to_state(&m, block);
         matrix_compression(&h_new, &h, &m, rounds, MDS, AFF);
         state_copy(&h, &h_new);
@@ -1286,12 +1285,12 @@ int matrix_hash_test(uint8_t *digest, size_t digest_len, const uint8_t *msg, siz
 
     /* --- TEST 7: ハッシュ全体の決定性 --- */
     {
-        uint8_t d2[MATRIX_STATE_BYTES];
+        uint8_t d2[MATRIX_STATE_BYTES_MAX];
         /* 同じ手順を再実行(検算用に独立計算) */
         state_t hh, mm, hn; state_init(&hh); state_init(&mm); state_init(&hn);
         state_set_zero(&hh); fp_set_ui(&hh.m[3][3],256);
         for(size_t b=0;b<num_blocks;b++){
-            matrix_bytes_to_state(&mm, padded + b*MATRIX_BLOCK_BYTES);
+            matrix_bytes_to_state(&mm, padded + b * block_bytes);
             matrix_compression(&hn,&hh,&mm,rounds,MDS,AFF);
             state_copy(&hh,&hn);
         }

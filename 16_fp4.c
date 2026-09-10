@@ -620,7 +620,8 @@ int fp4_is_square(const fp4_t *X){
     fp4_t res, one;
     fp4_pow(&res, X, exp);
     fp4_set_ui(&one, 1);
-
+    // printf("res:");
+    // fp4_printf(&res);
     int is_sq = fp4_is_equal(&res, &one);
 
     mpz_clear(p);

@@ -1,5 +1,39 @@
 #include "16_header.h"
 
+uint32_t P_MERSENNE = (1u << 31) - 1;   // 既定は 2^31-1
+unsigned FP_BITS    = 31;
+size_t state_bytes = 62; //16*31=496bit=62byte
+size_t block_bytes = 48; //16要素 * load_bits(24bit) / 8
+unsigned load_bits  = 24; //1要素あたりの読み込みbit数(q未満に抑える)
+
+//1要素あたりの読み込みbit数を決める。
+//fp_set_uiはmod還元するが、還元前のバイアスを避けるため常にqを下回る幅にする。
+//バイト境界に揃えられるならその方が実装が単純なので、q>8ではq未満最大のバイト境界を、
+//バイト境界が取れない小さいqではq-1bitを使う。
+static unsigned load_bits_for_q(unsigned q){
+    if (q > 8) {
+        return ((q - 1) / 8) * 8;
+    }
+    return q - 1;
+}
+
+static unsigned q_for_output(size_t n_bits){
+    if (n_bits == 0)   return 0;
+    if (n_bits <= 64)  return 7;
+    if (n_bits <= 256) return 31;
+    return 0;
+}
+int field_select_for_output(size_t n_bits){
+    unsigned q = q_for_output(n_bits);
+    if (q == 0) return 0;                    // 未対応 -> 失敗
+    FP_BITS    = q;
+    P_MERSENNE = (uint32_t)((1u << q) - 1);
+    state_bytes = 2 * q;
+    load_bits   = load_bits_for_q(q);
+    block_bytes = (16 * load_bits) / 8;
+    return 1;
+}
+
 uint64_t fp_mul_count = 0; // 乗算回数カウンタ
 uint64_t fp_add_count = 0; // 加算回数カウンタ
 uint64_t fp_sub_count = 0; // 減算回数カウンタ
@@ -8,7 +42,7 @@ uint64_t fp_sub_count = 0; // 減算回数カウンタ
 static inline uint32_t reduce_mersenne(uint64_t x) {
     // 上位31bitと下位31bitを足す
     // (x mod 2^31) + (x / 2^31) と等価
-    uint32_t result = (uint32_t)(x & P_MERSENNE) + (uint32_t)(x >> 31);
+    uint32_t result = (uint32_t)(x & P_MERSENNE) + (uint32_t)(x >> FP_BITS);
     
     // 足した結果、もう一度 P を超える可能性があるので調整
     if (result >= P_MERSENNE) {
@@ -49,7 +83,7 @@ void fp_set_zero(fp_t *S){
 }
 
 void fp_set_ui(fp_t *S, uint32_t x){
-    S->x0 = x;
+    S->x0 = x % P_MERSENNE;
 }
 
 int fp_is_equal(const fp_t *X, const fp_t *Y){
@@ -163,7 +197,8 @@ void fp_inv(fp_t *S, const fp_t *X){
     
     // 指数 p - 2 を作る
     mpz_t exp;
-    mpz_init_set_str(exp, "7FFFFFFD", 16); // 2^31 - 3 (つまり P - 2)
+    mpz_init_set_ui(exp, P_MERSENNE);
+    mpz_sub_ui(exp, exp, 2); // p - 2
     
     fp_pow(S, X, exp);
     
@@ -197,8 +232,10 @@ int fp_legendre(const fp_t *X){
 
     fp_t res;
     mpz_t exp;
-    // (p-1)/2 = (2^31 - 2) / 2 = 2^30 - 1 = 0x3FFFFFFF
-    mpz_init_set_str(exp, "3FFFFFFF", 16);
+    // (p-1)/2
+    mpz_init_set_ui(exp, P_MERSENNE);
+    mpz_sub_ui(exp, exp, 1);
+    mpz_tdiv_q_ui(exp, exp, 2);
 
     fp_pow(&res, X, exp);
     mpz_clear(exp);
@@ -225,7 +262,7 @@ int fp_sqrt(fp_t *b, fp_t *a){
     mpz_t exp;
     mpz_init(exp);
     mpz_set_ui(exp, 1);
-    mpz_mul_2exp(exp, exp, 29); // 2^29
+    mpz_mul_2exp(exp, exp, FP_BITS - 2); // 2^(FP_BITS - 2)
 
     // べき乗計算だけで平方根が求まる！ (Tonelli-Shanks不要)
     fp_pow(b, a, exp);

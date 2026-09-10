@@ -1,5 +1,5 @@
 blocks=2
-input_bits=1024
+input_bits=768
 samples=10000
 avg_ratio=0.50001
-max_dev=0.02460
+max_dev=0.02250

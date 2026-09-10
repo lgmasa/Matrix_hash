@@ -11,12 +11,23 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define P_MERSENNE 2147483647 //p = 2^31-1
+// #ifndef FP_BITS
+// #define FP_BITS 31
+// #endif
+// #define P_MERSENNE ((uint32_t)((1u << FP_BITS) - 1)) // 2^FP_BITS - 1
 #define P_PRIME 2147483629u //p = 2^31-19
-#define MATRIX_STATE_BYTES 64 //状態行列のサイズ 1要素4byte=32bit
-#define MATRIX_DIGEST_BYTES 32
+#define MATRIX_STATE_BYTES_MAX 64 //状態行列のサイズ 1要素4byte=32bit
+#define MATRIX_DIGEST_BYTES_MAX 32
 #define MATRIX_ROUNDS 10
-#define MATRIX_BLOCK_BYTES 48 //1ブロックあたりのbyte数
+#define MATRIX_BLOCK_BYTES_MAX 48 //1ブロックあたりのbyte数
+extern uint32_t P_MERSENNE;    // 現在の素数 2^q-1(実体は fp.c)
+extern unsigned FP_BITS;       // 現在のビット長 q
+extern size_t state_bytes; //実サイズ(qで決まる)
+extern size_t block_bytes; //実サイズ(qで決まる)
+extern unsigned load_bits; //メッセージ1要素あたりの読み込みbit数。fp_set_uiのmodはあるが、
+                            //バイアスを避けるため常にq未満に抑える(q>8: q未満最大のバイト境界 / q<=8: q-1bit)
+
+int field_select_for_output(size_t n_bits);   // 出力長→素数をセット
 
 // from fp.c
 typedef struct{
@@ -191,15 +202,15 @@ void matrix_output_transform(state_t *out, const state_t *h, int rounds, const s
 
 //行列からビット列に変換
 static void fp4_to_bytes_128(uint8_t *out, const fp4_t *x);
-void fp16_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES], const fp16_t *x);
-void matrix_state_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES], const state_t *S);
-void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_BLOCK_BYTES]);
+void fp16_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES_MAX], const fp16_t *x);
+void matrix_state_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES_MAX], const state_t *S);
+void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_BLOCK_BYTES_MAX]);
 
 //最終的な出力関数
-int matrix_trunc_head_bytes(uint8_t *digest, size_t digest_len, const uint8_t full_state[MATRIX_STATE_BYTES]);
+int matrix_trunc_head_bytes(uint8_t *digest, size_t digest_len, const uint8_t full_state[MATRIX_STATE_BYTES_MAX]);
 int matrix_output_transform_digest(uint8_t *digest, size_t digest_len, const state_t *h, int rounds, const state_t *MDS, const affine16_t *AFF);
 
-int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t block[MATRIX_BLOCK_BYTES], int rounds, const state_t *MDS, const affine16_t *AFF);
+int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t block[MATRIX_BLOCK_BYTES_MAX], int rounds, const state_t *MDS, const affine16_t *AFF);
 
 //padding関数
 size_t matrix_padded_length(size_t msg_len);
@@ -215,7 +226,7 @@ void matrix_selftest_report(void);
 //スループット計測関数
 double now_sec(void);
 void benchmark_matrix_hash(size_t msg_len, int iterations, const state_t *MDS, const affine16_t *AFF);
-void throughput_matrix_hash(const uint8_t *msg, size_t msg_len, int iterations, const state_t *MDS, const affine16_t *AFF);
+void throughput_matrix_hash(const uint8_t *msg, size_t msg_len, size_t digest_len, int iterations, const state_t *MDS, const affine16_t *AFF);
 
 //安全性評価関数
 int state_count_diff_components(const state_t *A, const state_t *B);

@@ -19,8 +19,8 @@ double now_sec(void){
     return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
 }
 
-void throughput_matrix_hash(const uint8_t *msg, size_t msg_len, int iterations, const state_t *MDS, const affine16_t *AFF){
-    uint8_t digest[MATRIX_DIGEST_BYTES];
+void throughput_matrix_hash(const uint8_t *msg, size_t msg_len, size_t digest_len, int iterations, const state_t *MDS, const affine16_t *AFF){
+    uint8_t digest[digest_len];
 
     /*
       ウォームアップ
@@ -29,7 +29,7 @@ void throughput_matrix_hash(const uint8_t *msg, size_t msg_len, int iterations, 
     for (int i = 0; i < 10; i++) {
         matrix_hash(
             digest,
-            MATRIX_DIGEST_BYTES,
+            digest_len,
             msg,
             msg_len,
             MATRIX_ROUNDS,
@@ -48,7 +48,7 @@ void throughput_matrix_hash(const uint8_t *msg, size_t msg_len, int iterations, 
     for (int i = 0; i < iterations; i++) {
         matrix_hash(
             digest,
-            MATRIX_DIGEST_BYTES,
+            digest_len,
             msg,
             msg_len,
             MATRIX_ROUNDS,
@@ -66,7 +66,7 @@ void throughput_matrix_hash(const uint8_t *msg, size_t msg_len, int iterations, 
     /*
       出力ビット数(256bit)
     */
-    size_t output_bits = (size_t)MATRIX_DIGEST_BYTES * 8;
+    size_t output_bits = (size_t)digest_len * 8;
 
     double sec_per_hash = elapsed / (double)iterations; // 1回のハッシュ化にかかる平均時間 [sec/hash]
     double sec_per_bit  = sec_per_hash / (double)output_bits; // 1bit 出力するのにかかる時間 [sec/bit]

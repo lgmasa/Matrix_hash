@@ -1,0 +1,4 @@
+# blocks=2 input_bits=768 out_bits=256 samples=1000
+rounds,avg_ratio,max_dev
+1,0.50001,0.07600
+2,0.50004,0.07500
