@@ -120,6 +120,15 @@ void state_print(const state_t *S){
     }
 }
 
+/* MDS = circ(1,1,2,8) を 16_main.c と同じに組む */
+void setup_MDS(state_t *MDS){
+    state_init(MDS);
+    int row[4] = {1, 1, 2, 8};
+    for(int i = 0; i < 4; i++)
+        for(int j = 0; j < 4; j++)
+            fp_set_ui(&MDS->m[i][j], (u128)row[(j - i + 4) & 3]);
+}
+
 //MDS行列×状態行列の各列
 void state_mix_column(fp_t y[4], const fp_t x[4], const state_t *M){
     fp_t acc;
@@ -288,16 +297,9 @@ void affine16_set_b(affine16_t *AFF)
 
 //A,bをセットする関数(一旦Aは単位ベクトル、bは零ベクトルでセット)
 void affine16_set(affine16_t *AFF){
-    for (int i = 0; i < 16; i++){
-        fp_set_zero(&AFF->b[i]);
-        for (int j = 0; j < 16; j++){
-        fp_set_zero(&AFF->A[i][j]);
-        }
-    }
-
-    for (int i = 0; i < 16; i++){
-        fp_set_ui(&AFF->A[i][i], 1);
-    }
+    affine16_init(AFF);
+    affine16_set_A(AFF);
+    affine16_set_b(AFF);
 }
 
 //16*16行列Aが正則行列(逆行列を持つ)かどうかを判定する関数

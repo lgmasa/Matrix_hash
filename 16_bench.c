@@ -113,14 +113,6 @@ static void bench_all(const char *names[], hash_fn fns[], size_t out_lens[],
 static state_t   g_MDS;
 static affine16_t g_AFF;
 
-static void setup_MDS(state_t *MDS){
-    state_init(MDS);
-    int row[4] = {1, 1, 2, 8};           /* circ(1,1,2,8) */
-    for(int i = 0; i < 4; i++)
-        for(int j = 0; j < 4; j++)
-            fp_set_ui(&MDS->m[i][j], (u128)row[(j - i + 4) & 3]);
-}
-
 /* ===== 各ハッシュのラッパ(共通シグネチャに合わせる) ===== */
 static void wrap_matrix(uint8_t *d, size_t out, const uint8_t *m, size_t len){
     matrix_hash(d, out, m, len, MATRIX_ROUNDS, &g_MDS, &g_AFF);

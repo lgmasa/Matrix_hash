@@ -155,6 +155,7 @@ void state_sub(state_t *Z, const state_t *X, const state_t *Y);
 void state_add3(state_t *Z, const state_t *A, const state_t *B, const state_t *C);
 int  state_equal(const state_t *A, const state_t *B);
 void state_print(const state_t *S);
+void setup_MDS(state_t *MDS);
 
 //mixbytes
 void state_mix_column(fp_t y[4], const fp_t x[4], const state_t *M);

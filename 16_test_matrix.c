@@ -21,15 +21,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-/* MDS = circ(1,1,2,8) を main.c と同じに組む */
-static void setup_MDS(state_t *MDS){
-    state_init(MDS);
-    int row[4] = {1,1,2,8};
-    for(int i=0;i<4;i++)
-        for(int j=0;j<4;j++)
-            fp_set_ui(&MDS->m[i][j], row[(j - i + 4) & 3]);  /* 巡回 */
-}
-
 static int popcount_bytes(const uint8_t *a, const uint8_t *b, size_t len){
     int c=0;
     for(size_t i=0;i<len;i++){
