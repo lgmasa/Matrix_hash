@@ -628,7 +628,7 @@ void matrix_output_transform(state_t *out, const state_t *h, int rounds, const s
 }
 
 //fp4の値をout[16]に格納→out[i]はそれぞれ1byteの大きさになる8bit(1byte)*16=128bit(16byte)
-static void fp4_to_bytes_128(uint8_t *out, const fp4_t *x){
+void fp4_to_bytes_128(uint8_t *out, const fp4_t *x){
     uint32_t v;
 
     v = x->x0.x0;
@@ -742,7 +742,7 @@ int matrix_output_transform_digest(uint8_t *digest, size_t digest_len, const sta
 }
 
 //blockからbitpos位置よりnbits分をMSBファーストで読み出す(fp16_to_bytes_512のビットパックの逆演算)
-static u128 load_bits_be(const uint8_t *block, size_t bitpos, unsigned nbits){
+u128 load_bits_be(const uint8_t *block, size_t bitpos, unsigned nbits){
     u128 v = 0;
     for(unsigned i = 0; i < nbits; i++){
         size_t bp = bitpos + i;

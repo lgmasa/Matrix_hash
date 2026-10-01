@@ -203,7 +203,7 @@ void matrix_compression(state_t *out, const state_t *h, const state_t *m, int ro
 void matrix_output_transform(state_t *out, const state_t *h, int rounds, const state_t *MDS, const affine16_t *AFF);
 
 //行列からビット列に変換
-static void fp4_to_bytes_128(uint8_t *out, const fp4_t *x);
+void fp4_to_bytes_128(uint8_t *out, const fp4_t *x);
 void fp16_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES_MAX], const fp16_t *x);
 void matrix_state_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES_MAX], const state_t *S);
 void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_BLOCK_BYTES_MAX]);
@@ -211,6 +211,7 @@ void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_BLOCK_BYTES_MA
 //最終的な出力関数
 int matrix_trunc_head_bytes(uint8_t *digest, size_t digest_len, const uint8_t full_state[MATRIX_STATE_BYTES_MAX]);
 int matrix_output_transform_digest(uint8_t *digest, size_t digest_len, const state_t *h, int rounds, const state_t *MDS, const affine16_t *AFF);
+u128 load_bits_be(const uint8_t *block, size_t bitpos, unsigned nbits);
 
 int matrix_hash_one_block(uint8_t *digest, size_t digest_len, const uint8_t block[MATRIX_BLOCK_BYTES_MAX], int rounds, const state_t *MDS, const affine16_t *AFF);
 
@@ -234,6 +235,39 @@ void throughput_matrix_hash(const uint8_t *msg, size_t msg_len, size_t digest_le
 int state_count_diff_components(const state_t *A, const state_t *B);
 void state_print_diff_map(const state_t *A, const state_t *B);
 void test_diffusion_P(const state_t *S, int diff_row, int diff_col, uint32_t diff_value, const state_t *MDS, affine16_t *AFF , int max_rounds);
+
+//XOF用関数
+/* 16_matrix.c のメッセージ読み込み関数(static を外したもの)。
+ * 16_header.h 側にも同じ宣言があっても問題ない */
+u128 load_bits_be(const uint8_t *block, size_t bitpos, unsigned nbits);
+ 
+/* XOF のパラメータ情報(比較用) */
+typedef struct {
+    unsigned q;              /* 素数のビット長 */
+    unsigned cap_elems;      /* キャパシティ要素数 */
+    unsigned rate_elems;     /* レート要素数 */
+    size_t   rate_bytes;     /* 1ブロックの吸収/出力バイト数 */
+    unsigned capacity_bits;  /* キャパシティ c (bit) */
+    unsigned security_bits;  /* c/2(置換 P が理想置換だと仮定した強度の上限) */
+    unsigned state_bits;     /* 状態長 16q */
+} xof_info;
+ 
+/* 共通の中身(素数 q とキャパシティ要素数を指定) */
+int matrix_xof(uint8_t *out, size_t out_len,
+               const uint8_t *msg, size_t msg_len,
+               unsigned q, unsigned cap_elems,
+               int rounds, const state_t *MDS, const affine16_t *AFF);
+ 
+/* 比較用の入口(パラメータ固定) */
+int xof_31 (uint8_t *out, size_t out_len, const uint8_t *msg, size_t msg_len,
+            const state_t *MDS, const affine16_t *AFF);
+int xof_127(uint8_t *out, size_t out_len, const uint8_t *msg, size_t msg_len,
+            const state_t *MDS, const affine16_t *AFF);
+ 
+xof_info xof_get_info(unsigned q, unsigned cap_elems);
+xof_info xof_31_info(void);
+xof_info xof_127_info(void);
+
 
 //テスト関数
 void test_matrix_hash_one_block(void);
