@@ -16,11 +16,13 @@
 // #endif
 // #define P_MERSENNE ((uint32_t)((1u << FP_BITS) - 1)) // 2^FP_BITS - 1
 #define P_PRIME 2147483629u //p = 2^31-19
-#define MATRIX_STATE_BYTES_MAX 64 //状態行列のサイズ 1要素4byte=32bit
-#define MATRIX_DIGEST_BYTES_MAX 32
+#define MATRIX_STATE_BYTES_MAX 256 //状態行列のサイズ 1要素4byte=32bit
+#define MATRIX_DIGEST_BYTES_MAX 256
 #define MATRIX_ROUNDS 10
-#define MATRIX_BLOCK_BYTES_MAX 48 //1ブロックあたりのbyte数
-extern uint32_t P_MERSENNE;    // 現在の素数 2^q-1(実体は fp.c)
+#define MATRIX_BLOCK_BYTES_MAX 240 //1ブロックあたりのbyte数
+#define MASK64 0xFFFFFFFFFFFFFFFFULL
+typedef unsigned __int128 u128;
+extern u128 P_MERSENNE;    // 現在の素数 2^q-1(実体は fp.c)
 extern unsigned FP_BITS;       // 現在のビット長 q
 extern size_t state_bytes; //実サイズ(qで決まる)
 extern size_t block_bytes; //実サイズ(qで決まる)
@@ -31,7 +33,7 @@ int field_select_for_output(size_t n_bits);   // 出力長→素数をセット
 
 // from fp.c
 typedef struct{
-    uint32_t x0;
+    unsigned __int128 x0;
 }fp_t;
 
 void fp_init(fp_t *X);
@@ -39,7 +41,7 @@ void fp_clear(fp_t *X);
 void fp_printf(const fp_t *X);
 void fp_set(fp_t *S, const fp_t *X);
 void fp_set_zero(fp_t *S);
-void fp_set_ui(fp_t *S, uint32_t x);
+void fp_set_ui(fp_t *S, u128 x);
 int fp_is_equal(const fp_t *X, const fp_t *Y);
 int fp_is_zero(const fp_t *X);
 void fp_random(fp_t *X);
@@ -68,7 +70,7 @@ void fp4_clear(fp4_t *X);
 void fp4_printf(const fp4_t *X);
 void fp4_set(fp4_t *S, const fp4_t *X);
 void fp4_set_zero(fp4_t *S);
-void fp4_set_ui(fp4_t *S, unsigned long int x); // 整数セット用
+void fp4_set_ui(fp4_t *S, u128 x); // 整数セット用
 void fp4_random(fp4_t *X);
 int fp4_is_equal(const fp4_t *A, const fp4_t *B); //一致していれば1、不一致なら0を返す
 int fp4_is_zero(const fp4_t *X);
@@ -236,7 +238,9 @@ void test_diffusion_P(const state_t *S, int diff_row, int diff_col, uint32_t dif
 //テスト関数
 void test_matrix_hash_one_block(void);
 void print_bytes_hex(const uint8_t *buf, size_t len);
+void print_u128_dec(u128 v);
 void test_state_bytes_roundtrip(void);
+void test_load_bits_be(void);
 // void matrix_add_round_constant_p(state_t *S, uint8_t round);
 // void matrix_add_round_constant_q(state_t *S, uint8_t round);
 // void matrix_shiftbytes(state_t *S);

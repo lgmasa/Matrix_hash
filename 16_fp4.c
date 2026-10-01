@@ -19,8 +19,16 @@ void fp4_clear(fp4_t *X){
 }
 
 void fp4_printf(const fp4_t *X){
-    printf("%u*a + %u*a^2 + %u*a^4 + %u*a^3\n",
-        X->x0.x0,X->x1.x0,X->x2.x0,X->x3.x0);
+    // printf("%u*a + %u*a^2 + %u*a^4 + %u*a^3\n",
+    //     X->x0.x0,X->x1.x0,X->x2.x0,X->x3.x0);
+    print_u128_dec(X->x0.x0);
+    printf("*a + ");
+    print_u128_dec(X->x1.x0);
+    printf("*a^2 + ");
+    print_u128_dec(X->x2.x0);
+    printf("*a^4 + ");
+    print_u128_dec(X->x3.x0);
+    printf("*a^3\n");
 }
 
 void fp4_set(fp4_t *S, const fp4_t *X){
@@ -37,14 +45,11 @@ void fp4_set_zero(fp4_t *S){
     fp_set_zero(&S->x3);
 }
 
-void fp4_set_ui(fp4_t *S, unsigned long int x){
+void fp4_set_ui(fp4_t *S, u128 x){
     // 1 = -(γ + ... + γ^3)
-    uint32_t val = (uint32_t)x;
-    // mod p
-    while (val >= P_MERSENNE) val -= P_MERSENNE;
-    
-    // -val mod p
-    if (val != 0) val = P_MERSENNE - val;
+    u128 val = (u128)x;                     // uint32_t -> u128
+    val %= P_MERSENNE;                       // while ループより剰余が確実(127でも正しく落ちる)
+    if (val != 0) val = P_MERSENNE - val;    // 1 = -(γ+...) の埋め込み。式はそのまま
 
     S->x0.x0 = val; S->x1.x0 = val;
     S->x2.x0 = val; S->x3.x0 = val;
