@@ -1,10 +1,34 @@
 #include "16_header.h"
 
-uint32_t P_MERSENNE = (1u << 31) - 1;   // 既定は 2^31-1
+u128 P_MERSENNE = (1u << 31) - 1;   // 既定は 2^31-1
 unsigned FP_BITS    = 31;
 size_t state_bytes = 62; //16*31=496bit=62byte
 size_t block_bytes = 48; //16要素 * load_bits(24bit) / 8
 unsigned load_bits  = 24; //1要素あたりの読み込みbit数(q未満に抑える)
+static const u128 P127 = (((u128)1) << 127) - 1;
+
+// 127bit境界の fold 還元 (s < 2^128 を [0,p) に)
+static inline u128 reduce127(u128 s){
+    s = (s & P127) + (s >> 127);
+    if (s >= P127) s -= P127;
+    return s;
+}
+
+// r = a*b mod (2^127-1).  a,b < p
+u128 mulmod127(u128 a, u128 b){
+    uint64_t a0=(uint64_t)(a&MASK64), a1=(uint64_t)(a>>64);
+    uint64_t b0=(uint64_t)(b&MASK64), b1=(uint64_t)(b>>64);
+    u128 t00=(u128)a0*b0, t01=(u128)a0*b1, t10=(u128)a1*b0, t11=(u128)a1*b1;
+    u128 mid = t01 + t10;                       // < 2^128
+    u128 Plo = t00, Phi = t11;
+    uint64_t midlo=(uint64_t)(mid&MASK64), midhi=(uint64_t)(mid>>64);
+    u128 add1=((u128)midlo)<<64, old=Plo;
+    Plo += add1; if (Plo < old) Phi += 1;       // 桁上がり
+    Phi += midhi;
+    u128 lo127 = Plo & P127;
+    u128 hi     = (Phi << 1) | (Plo >> 127);    // P >> 127
+    return reduce127(lo127 + hi);
+}
 
 //1要素あたりの読み込みbit数を決める。
 //fp_set_uiはmod還元するが、還元前のバイアスを避けるため常にqを下回る幅にする。
@@ -21,16 +45,17 @@ static unsigned q_for_output(size_t n_bits){
     if (n_bits == 0)   return 0;
     if (n_bits <= 64)  return 7;
     if (n_bits <= 256) return 31;
+    if (n_bits <= 1016) return 127;
     return 0;
 }
 int field_select_for_output(size_t n_bits){
     unsigned q = q_for_output(n_bits);
     if (q == 0) return 0;                    // 未対応 -> 失敗
     FP_BITS    = q;
-    P_MERSENNE = (uint32_t)((1u << q) - 1);
+    P_MERSENNE = (((u128)1 << q) - 1);
     state_bytes = 2 * q;
-    load_bits   = load_bits_for_q(q);
-    block_bytes = (16 * load_bits) / 8;
+    load_bits   = load_bits_for_q(q); //ブロックの1要素当たり何bitか 2^7-1→6bit 2^31-1→24bit 2^127-1→120bit
+    block_bytes = (16 * load_bits) / 8; //1ブロック何byteか 2^7-1→12byte 2^31-1→48byte 2^127-1→240byte
     return 1;
 }
 
@@ -70,7 +95,10 @@ void fp_clear(fp_t *X){
 
 // 表示
 void fp_printf(const fp_t *X){
-    gmp_printf("%u",X->x0);
+    unsigned long long hi=(unsigned long long)(X->x0 >> 64);
+    unsigned long long lo=(unsigned long long)(X->x0 & 0xFFFFFFFFFFFFFFFFULL);
+    if (hi) gmp_printf("%llx%016llx", hi, lo);   // 上位があれば hex 連結
+    else    gmp_printf("%llu", lo);              // 収まるなら10進
 }
 
 // 代入
@@ -82,7 +110,7 @@ void fp_set_zero(fp_t *S){
     S->x0 = 0;
 }
 
-void fp_set_ui(fp_t *S, uint32_t x){
+void fp_set_ui(fp_t *S, u128 x){
     S->x0 = x % P_MERSENNE;
 }
 
@@ -95,19 +123,22 @@ int fp_is_zero(const fp_t *X){
     return (X->x0 == 0);
 }
 
-void fp_random(fp_t *X) {
-    // rand() のシードを1回だけ初期化
+void fp_random(fp_t *X){
     static int seeded = 0;
-    if (!seeded) {
-        srand((unsigned int)time(NULL));
-        seeded = 1;
+    if (!seeded){ srand((unsigned int)time(NULL)); seeded = 1; }
+    u128 r = 0;
+    for (int i = 0; i < 4; i++)                 // 32bit×4=128bit 埋める
+        r = (r << 32) | (u128)((uint32_t)rand());
+    if (FP_BITS <= 31) {
+        uint32_t r = (uint32_t)rand();
+        r ^= ((uint32_t)rand() << 16);      // ← 元と完全に同じ
+        X->x0 = (u128)(r & P_MERSENNE);
+    } else {
+        u128 r = 0;
+        for (int i=0;i<4;i++) r = (r<<32) | (u128)((uint32_t)rand());
+        X->x0 = mulmod127(r, 1);
     }
-
-    uint32_t r = (uint32_t)rand();
-    r ^= ((uint32_t)rand() << 16); // 上位ビットも埋める
-    
-    X->x0 = r & P_MERSENNE;
-    if (X->x0 == P_MERSENNE) X->x0 = 0; // Pと等しい場合は0にする
+    if (X->x0 == P_MERSENNE) X->x0 = 0;
 }
 
 // 比較
@@ -129,7 +160,7 @@ void fp_neg(fp_t *S, const fp_t *X){
 // 和 S = X + Y
 void fp_add(fp_t *S, const fp_t *X, const fp_t *Y){
     fp_add_count++;
-    uint32_t sum = X->x0 + Y->x0;
+    u128 sum = X->x0 + Y->x0;
         if (sum >= P_MERSENNE) {
             sum -= P_MERSENNE;
         }
@@ -148,8 +179,8 @@ void fp_add_plus(fp_t *S, const fp_t *X, const fp_t *Y){
 // 差 S = X - Y
 void fp_sub(fp_t *S, const fp_t *X, const fp_t *Y){
     fp_sub_count++;
-    uint32_t x = X->x0;
-    uint32_t y = Y->x0;
+    u128 x = X->x0;
+    u128 y = Y->x0;
     
     if (x < y) {
         // 負になる場合は P を足してから引く (mod計算のテクニック)
@@ -176,8 +207,12 @@ void fp_sub_plus(fp_t *S, const fp_t *X, const fp_t *Y){
 void fp_mul(fp_t *S, const fp_t *X, const fp_t *Y){
     fp_mul_count++;
     // 64bitで掛け算してから、31bitに落とす
-    uint64_t prod = (uint64_t)X->x0 * (uint64_t)Y->x0;
-    S->x0 = reduce_mersenne(prod);
+    if(FP_BITS <= 31){
+        uint64_t prod = (uint64_t)X->x0 * (uint64_t)Y->x0;
+        S->x0 = reduce_mersenne(prod);
+    } else{
+        S->x0 = mulmod127(X->x0, Y->x0);
+    }
 }
 
 // 積 S = X * Y
@@ -197,7 +232,9 @@ void fp_inv(fp_t *S, const fp_t *X){
     
     // 指数 p - 2 を作る
     mpz_t exp;
-    mpz_init_set_ui(exp, P_MERSENNE);
+    mpz_init(exp);
+    mpz_ui_pow_ui(exp, 2, FP_BITS); //2^7 or 2^31 or 2^127
+    mpz_sub_ui(exp, exp, 1); // = p
     mpz_sub_ui(exp, exp, 2); // p - 2
     
     fp_pow(S, X, exp);
@@ -233,7 +270,7 @@ int fp_legendre(const fp_t *X){
     fp_t res;
     mpz_t exp;
     // (p-1)/2
-    mpz_init_set_ui(exp, P_MERSENNE);
+    mpz_init(exp); mpz_ui_pow_ui(exp, 2, FP_BITS); mpz_sub_ui(exp, exp, 1); // = p
     mpz_sub_ui(exp, exp, 1);
     mpz_tdiv_q_ui(exp, exp, 2);
 
