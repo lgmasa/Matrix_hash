@@ -120,6 +120,15 @@ void state_print(const state_t *S){
     }
 }
 
+/* MDS = circ(1,1,2,8) を 16_main.c と同じに組む */
+void setup_MDS(state_t *MDS){
+    state_init(MDS);
+    int row[4] = {1, 1, 2, 8};
+    for(int i = 0; i < 4; i++)
+        for(int j = 0; j < 4; j++)
+            fp_set_ui(&MDS->m[i][j], (u128)row[(j - i + 4) & 3]);
+}
+
 //MDS行列×状態行列の各列
 void state_mix_column(fp_t y[4], const fp_t x[4], const state_t *M){
     fp_t acc;
@@ -218,7 +227,8 @@ void affine16_clear(affine16_t *AFF){
 void affine16_print_A(const affine16_t *F){
     for (int i = 0; i < 16; i++) {
         for (int j = 0; j < 16; j++) {
-            printf("%u ", F->A[i][j].x0);
+            // printf("%u ", F->A[i][j].x0);
+            print_u128_dec(F->A[i][j].x0);
         }
         printf("\n");
     }
@@ -227,7 +237,8 @@ void affine16_print_A(const affine16_t *F){
 void affine16_print_b(const affine16_t *F)
 {
     for (int i = 0; i < 16; i++) {
-        printf("%u ", F->b[i].x0);
+        // printf("%u ", F->b[i].x0);
+        print_u128_dec(F->b[i].x0);
     }
 
     printf("\n");
@@ -286,16 +297,9 @@ void affine16_set_b(affine16_t *AFF)
 
 //A,bをセットする関数(一旦Aは単位ベクトル、bは零ベクトルでセット)
 void affine16_set(affine16_t *AFF){
-    for (int i = 0; i < 16; i++){
-        fp_set_zero(&AFF->b[i]);
-        for (int j = 0; j < 16; j++){
-        fp_set_zero(&AFF->A[i][j]);
-        }
-    }
-
-    for (int i = 0; i < 16; i++){
-        fp_set_ui(&AFF->A[i][i], 1);
-    }
+    affine16_init(AFF);
+    affine16_set_A(AFF);
+    affine16_set_b(AFF);
 }
 
 //16*16行列Aが正則行列(逆行列を持つ)かどうかを判定する関数
@@ -626,7 +630,7 @@ void matrix_output_transform(state_t *out, const state_t *h, int rounds, const s
 }
 
 //fp4の値をout[16]に格納→out[i]はそれぞれ1byteの大きさになる8bit(1byte)*16=128bit(16byte)
-static void fp4_to_bytes_128(uint8_t *out, const fp4_t *x){
+void fp4_to_bytes_128(uint8_t *out, const fp4_t *x){
     uint32_t v;
 
     v = x->x0.x0;
@@ -660,9 +664,9 @@ static void fp4_to_bytes_128(uint8_t *out, const fp4_t *x){
 void fp16_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES_MAX], const fp16_t *x){
     //16個のFP_BITSbit係数を所定の順序で集める
     const fp4_t *blk[4] = { &x->x0, &x->x1, &x->x2, &x->x3 };
-    uint32_t vals[16];
+    u128 vals[16];
     int idx = 0;
-    uint32_t mask = (FP_BITS >= 32) ? 0xffffffffu : ((1u << FP_BITS) - 1u);
+    u128 mask = (FP_BITS >= 128) ? (~(u128)0) : ((((u128)1) << FP_BITS) - 1); //(~(u128)0):(u128)型の0をsすべて反転(~), (((u128)1) << FP_BITS) - 1:2^FP_BITS-1
     for(int i = 0; i < 4; i++){
         vals[idx++] = blk[i]->x0.x0 & mask;
         vals[idx++] = blk[i]->x1.x0 & mask;
@@ -674,9 +678,9 @@ void fp16_to_bytes_512(uint8_t out[MATRIX_STATE_BYTES_MAX], const fp16_t *x){
     memset(out, 0, state_bytes);
     size_t bitpos = 0;
     for(int e = 0; e < 16; e++){
-        uint32_t v = vals[e];
+        u128 v = vals[e];
         for(int b = (int)FP_BITS - 1; b >= 0; b--){   //FP_BITSbit、上位ビットから
-            if((v >> b) & 1u)
+            if((v >> b) & (u128)1)
                 out[bitpos >> 3] |= (uint8_t)(0x80u >> (bitpos & 7));
             bitpos++;
         }
@@ -740,14 +744,32 @@ int matrix_output_transform_digest(uint8_t *digest, size_t digest_len, const sta
 }
 
 //blockからbitpos位置よりnbits分をMSBファーストで読み出す(fp16_to_bytes_512のビットパックの逆演算)
-static uint32_t load_bits_be(const uint8_t *block, size_t bitpos, unsigned nbits){
-    uint32_t v = 0;
+u128 load_bits_be(const uint8_t *block, size_t bitpos, unsigned nbits){
+    u128 v = 0;
     for(unsigned i = 0; i < nbits; i++){
         size_t bp = bitpos + i;
         int bit = (block[bp >> 3] >> (7 - (bp & 7))) & 1;
-        v = (v << 1) | (uint32_t)bit;
+        v = (v << 1) | (u128)bit;
     }
     return v;
+}
+
+// 16_matrix.c の中(load_bits_be より後ろ)に追加
+void test_load_bits_be(void){
+    field_select_for_output(512);   // FP_BITS=127, load_bits=120 にする
+
+    // 適当なビット列(先頭が全部1なら、上位ビットまで埋まるはず)
+    uint8_t blk[MATRIX_BLOCK_BYTES_MAX];
+    for(int i=0;i<MATRIX_BLOCK_BYTES_MAX;i++) blk[i] = 0xFF;   // 全ビット1
+
+    u128 v = load_bits_be(blk, 0, load_bits);   // 先頭 load_bits(=120)bit を取り出す
+
+    unsigned long long hi = (unsigned long long)(v >> 64);
+    unsigned long long lo = (unsigned long long)(v & 0xFFFFFFFFFFFFFFFFULL);
+    printf("load_bits=%u\n", load_bits);
+    printf("v hi=%016llx lo=%016llx\n", hi, lo);
+    // 期待: 120bit全部1 -> hi=0000ffffffffffff lo=ffffffffffffffff
+    //       (120bit = 上位56bit + 下位64bit。hi の上位8バイトのうち下56bitが1)
 }
 
 //メッセージブロック(block_bytes byte)を4*4行列に変換
@@ -756,7 +778,7 @@ void matrix_bytes_to_state(state_t *S, const uint8_t block[MATRIX_BLOCK_BYTES_MA
 
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
-            uint32_t v = load_bits_be(block, bitpos, load_bits); //load_bits < FP_BITS なので mod は実質不要だが安全のため通す
+            u128 v = load_bits_be(block, bitpos, load_bits); //load_bits < FP_BITS なので mod は実質不要だが安全のため通す
             fp_set_ui(&S->m[i][j], v);
 
             bitpos += load_bits;
@@ -783,6 +805,18 @@ void print_bytes_hex(const uint8_t *buf, size_t len){
     if (len % 16 != 0) {
         printf("\n");
     }
+}
+
+//__int128を10進数で出力する関数
+void print_u128_dec(u128 v){
+    if (v == 0){ printf("0"); return; }
+    char buf[40];              // 2^128 は10進で最大39桁
+    int i = 0;
+    while (v > 0){
+        buf[i++] = '0' + (int)(v % 10);   // 下の桁から取り出す
+        v /= 10;
+    }
+    while (i--) putchar(buf[i]);  // 逆順に出力
 }
 
 //1ブロック分のハッシュ処理をまとめる関数
@@ -872,7 +906,6 @@ int matrix_hash(uint8_t *digest, size_t digest_len, const uint8_t *msg, size_t m
     if(digest == NULL || msg == NULL || MDS == NULL) return 0;
     if(digest_len > state_bytes) return 0;
     if(!matrix_check_msg_len(msg_len)) return 0;
-    printf("p_mer : %u\n",P_MERSENNE);
 
 
     //パディングを入れた後のバイト長を求める（実際には長さを確保しただけでまだ入れてない）
@@ -1226,7 +1259,7 @@ int matrix_hash_test(uint8_t *digest, size_t digest_len, const uint8_t *msg, siz
         matrix_permutation_P(&p1, &s, rounds, MDS, AFF);
         matrix_permutation_P(&p2, &s, rounds, MDS, AFF);
         matrix_permutation_Q(&q1, &s, rounds, MDS, AFF);
-        uint8_t bp1[64], bp2[64], bq1[64];
+        uint8_t bp1[MATRIX_STATE_BYTES_MAX], bp2[MATRIX_STATE_BYTES_MAX], bq1[MATRIX_STATE_BYTES_MAX];
         matrix_state_to_bytes_512(bp1,&p1);
         matrix_state_to_bytes_512(bp2,&p2);
         matrix_state_to_bytes_512(bq1,&q1);
@@ -1248,7 +1281,7 @@ int matrix_hash_test(uint8_t *digest, size_t digest_len, const uint8_t *msg, siz
         matrix_permutation_Q(&q, &m0, rounds, MDS, AFF);    /* Q(m) */
         state_add3(&expect, &p, &q, &h);                    /* P(h+m)+Q(m)+h */
         matrix_compression(&got, &h, &m0, rounds, MDS, AFF);
-        uint8_t be[64], bg[64];
+        uint8_t be[MATRIX_STATE_BYTES_MAX], bg[MATRIX_STATE_BYTES_MAX];
         matrix_state_to_bytes_512(be,&expect);
         matrix_state_to_bytes_512(bg,&got);
         DBG_CHECK("compression f=P(h+m)+Q(m)+h", memcmp(be,bg,64)==0,
@@ -1272,7 +1305,7 @@ int matrix_hash_test(uint8_t *digest, size_t digest_len, const uint8_t *msg, siz
         uint8_t oracc[64]; memset(oracc,0,64);
         for(int t=0;t<2000;t++){
             state_t rs; state_init(&rs); state_random(&rs);
-            uint8_t rb[64]; matrix_state_to_bytes_512(rb,&rs);
+            uint8_t rb[MATRIX_STATE_BYTES_MAX]; matrix_state_to_bytes_512(rb,&rs);
             for(int k=0;k<64;k++) oracc[k]|=rb[k];
             state_clear(&rs);
         }
@@ -1363,7 +1396,7 @@ int matrix_hash_test(uint8_t *digest, size_t digest_len, const uint8_t *msg, siz
 
 void test_state_bytes_roundtrip(void){
     state_t S, T;
-    uint8_t buf[64];
+    uint8_t buf[MATRIX_STATE_BYTES_MAX];
 
     state_init(&S);
     state_init(&T);
