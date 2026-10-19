@@ -526,3 +526,98 @@ int fp16_is_scalar(const fp16_t *X){
            fp4_is_zero(&X->x2) &&
            fp4_is_zero(&X->x3);
 }
+
+
+/* ===================================================================
+ * naive 法(CVMA を使わない乗算)での逆元計算と、素体乗算の回数の測定
+ * =================================================================== */
+
+/* S = X^exp。fp16_pow と同じ右から左へのバイナリ法だが、乗算に fp16_mul_slow を使う */
+void fp16_pow_slow(fp16_t *S, const fp16_t *X, const mpz_t exp){
+    fp16_t result, base;
+    // result = 1
+    fp4_set_ui(&result.x0, 1);
+    fp4_set_ui(&result.x1, 0);
+    fp4_set_ui(&result.x2, 0);
+    fp4_set_ui(&result.x3, 0);
+
+    fp16_set(&base, X);
+
+    size_t bit_len = mpz_sizeinbase(exp, 2);
+    for (size_t i = 0; i < bit_len; i++) {
+        if (mpz_tstbit(exp, i)) {
+            fp16_mul_slow(&result, &result, &base);
+        }
+        fp16_mul_slow(&base, &base, &base);   // 2乗
+    }
+    fp16_set(S, &result);
+}
+
+/* ランダムな元 X に対して、naive 法で X^(p^16-2) を計算し、
+ *   1) 結果が逆元になっているか(X * X^(p^16-2) == 1、および fp16_inv の結果と一致するか)
+ *   2) 計算に使った素体乗算(fp_mul)の回数
+ * を表示する。
+ * n_bits は素数を選ぶための出力ビット長(64 -> 2^7-1, 256 -> 2^31-1, 1016 -> 2^127-1) */
+void fp16_inv_naive_check(size_t n_bits){
+    if (!field_select_for_output(n_bits)) {
+        printf("素数の選択に失敗しました (n_bits = %zu)\n", n_bits);
+        return;
+    }
+
+    fp16_t X, Y, Z, one;
+
+    // ランダムな非ゼロの元 X
+    do { fp16_random(&X); } while (fp16_is_zero(&X));
+
+    // 指数 e = p^16 - 2
+    mpz_t p, e;
+    mpz_init(p);
+    mpz_init(e);
+    mpz_ui_pow_ui(p, 2, FP_BITS);
+    mpz_sub_ui(p, p, 1);
+    mpz_pow_ui(e, p, 16);
+    mpz_sub_ui(e, e, 2);
+    size_t L = mpz_sizeinbase(e, 2);   // 指数のビット長
+    size_t w = mpz_popcount(e);        // 指数の 1 のビット数
+
+    // fp16_mul_slow 1回あたりの fp_mul 回数
+    uint64_t c0 = fp_mul_count;
+    fp16_mul_slow(&Z, &X, &X);
+    uint64_t per_mul = fp_mul_count - c0;
+
+    // 逆元計算(ここだけを数える)
+    c0 = fp_mul_count;
+    uint64_t s0 = fp4_mul_slow_count;
+    fp16_pow_slow(&Y, &X, e);
+    uint64_t n_fp_mul  = fp_mul_count       - c0;
+    uint64_t n_fp4_mul = fp4_mul_slow_count - s0;
+
+    // 確認 1: X * Y == 1(確認には CVMA 版の fp16_mul を使う = 別の実装でのクロスチェック)
+    fp4_set_ui(&one.x0, 1);
+    fp4_set_ui(&one.x1, 0);
+    fp4_set_ui(&one.x2, 0);
+    fp4_set_ui(&one.x3, 0);
+    fp16_mul(&Z, &X, &Y);
+    int ok_one = fp16_is_equal(&Z, &one);
+
+    // 確認 2: 既存の fp16_inv と同じ結果か
+    fp16_inv(&Z, &X);
+    int ok_inv = fp16_is_equal(&Z, &Y);
+
+    uint64_t theory = (uint64_t)(L + w) * per_mul;
+
+    printf("== naive 法での逆元 x^(p^16-2), p = 2^%u - 1 ==\n", FP_BITS);
+    printf("  指数 p^16-2                 : ビット長 L = %zu, 1のビット数 w = %zu\n", L, w);
+    printf("  fp16_mul_slow 1回あたり     : fp_mul %llu 回\n", (unsigned long long)per_mul);
+    printf("  fp16_mul_slow の回数        : L + w = %zu 回\n", L + w);
+    printf("  素体乗算 fp_mul の回数      : %llu 回 (fp4_mul_slow %llu 回)\n",
+           (unsigned long long)n_fp_mul, (unsigned long long)n_fp4_mul);
+    printf("  理論値 (L + w) x %llu        : %llu 回 -> %s\n",
+           (unsigned long long)per_mul, (unsigned long long)theory,
+           n_fp_mul == theory ? "一致" : "不一致");
+    printf("  X * X^(p^16-2) == 1         : %s\n", ok_one ? "OK" : "NG");
+    printf("  fp16_inv の結果と一致       : %s\n\n", ok_inv ? "OK" : "NG");
+
+    mpz_clear(p);
+    mpz_clear(e);
+}

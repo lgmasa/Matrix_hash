@@ -132,6 +132,8 @@ void fp16_inv_new(fp16_t *S, const fp16_t *X);
 void fp16_inv_slow(fp16_t *S, const fp16_t *X);
 void fp16_inv_karatsuba(fp16_t *S, const fp16_t *X);
 int fp16_is_scalar(const fp16_t *X);
+void fp16_pow_slow(fp16_t *S, const fp16_t *X, const mpz_t exp);
+void fp16_inv_naive_check(size_t n_bits);
 
 typedef struct{
     fp_t m[4][4];

@@ -51,18 +51,18 @@ int main(void){
 
     affine16_t AFF;
     affine16_set(&AFF);
-    printf("A:\n");
-    affine16_print_A(&AFF);
-    printf("b:\n");
-    affine16_print_b(&AFF);
+    // printf("A:\n");
+    // affine16_print_A(&AFF);
+    // printf("b:\n");
+    // affine16_print_b(&AFF);
 
-    int A = affine16_is_regular(&AFF);
+    // int A = affine16_is_regular(&AFF);
 
-    if (A){
-        printf("A is regular\n");
-    }else{
-        printf("A is not regular\n");
-    }
+    // if (A){
+    //     printf("A is regular\n");
+    // }else{
+    //     printf("A is not regular\n");
+    // }
 
 
 
@@ -73,9 +73,11 @@ int main(void){
     uint8_t msg[] = "asahi"; //文字列リテラル "Hello World" の各文字コードが uint8_t 配列に格納される
     size_t msg_len = sizeof(msg) -1; //末尾のヌル文字\0も数えてしまい、1文字多くなってしまうから1を引く
     size_t digest_len = 32; //ここで出力長を決定（これはバイト長）, digest_len <= 8 → p = 2^7-1,  9 <= digest_len <= 32 → p = 2^31-1, 33 <= digest_len <= 127 → p = 2^127-1
+    uint8_t digest_xof[MATRIX_DIGEST_BYTES_MAX];
+    size_t digest_xof_len = 32; //特に出力長の制限なしだが、この配列だと256bytesが最大
 
-    printf("MDS :\n");
-    state_print(&MDS);
+    // printf("MDS :\n");
+    // state_print(&MDS);
 
     printf("msg : ");
     printf("%s\n",msg);
@@ -84,13 +86,20 @@ int main(void){
     //throughput_matrix_hash(msg, msg_len, 100, &MDS, &AFF);
 
     matrix_hash(digest, digest_len, msg, msg_len, MATRIX_ROUNDS, &MDS, &AFF);
+    xof_31(digest_xof, digest_xof_len, msg, msg_len, &MDS, &AFF);
 
     printf("p_mer : "); print_u128_dec(P_MERSENNE); printf("\n");
     printf("digest :\n");
     print_bytes_hex(digest, digest_len);
 
+    printf("digest_xof :\n");
+    print_bytes_hex(digest_xof, digest_xof_len);
+
     state_clear(&MDS);
     affine16_clear(&AFF);
+
+    fp16_inv_naive_check(256);
+
     return 0;
 }
 
