@@ -20,7 +20,7 @@ static void bench_fp_init_ab(void){
 }
 
 // ベンチマーク: fp16_inv を iters 回呼び出してナノ秒を返す
-static long bench_fp16_inv_ns(int iters, bench_counts_t *counts){
+static long long bench_fp16_inv_ns(int iters, bench_counts_t *counts){
     fp16_t a, inv;
     fp16_init(&a); fp16_init(&inv);
     fp16_random(&a);
@@ -51,9 +51,9 @@ static long bench_fp16_inv_ns(int iters, bench_counts_t *counts){
         fp16_random(&a);
     }
     clock_gettime(CLOCK_MONOTONIC, &ed2);
-    long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
-    long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000L + (ed2.tv_nsec - st2.tv_nsec);
-    long ns = ns_ops - ns_init;
+    long long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000LL + (ed2.tv_nsec - st2.tv_nsec);
+    long long ns = ns_ops - ns_init;
     if (ns < 0) ns = 0;
     uint64_t muls = after - before;
     uint64_t adds = after_add - before_add;
@@ -75,9 +75,9 @@ static long bench_fp16_inv_ns(int iters, bench_counts_t *counts){
     return ns;
 }
 
-static long bench_fp16_inv_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs, uint64_t *fp4s){
+static long long bench_fp16_inv_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs, uint64_t *fp4s){
     bench_counts_t counts = {0};
-    long ns = bench_fp16_inv_ns(iters, &counts);
+    long long ns = bench_fp16_inv_ns(iters, &counts);
     if (muls) *muls = counts.muls;
     if (adds) *adds = counts.adds;
     if (subs) *subs = counts.subs;
@@ -85,7 +85,7 @@ static long bench_fp16_inv_run_ns(int iters, uint64_t *muls, uint64_t *adds, uin
     return ns;
 }
 
-long bench_fp16_inv_avg(int iters, int count){
+long long bench_fp16_inv_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count;
     unsigned long long total_muls = 0;
@@ -106,10 +106,10 @@ long bench_fp16_inv_avg(int iters, int count){
         (double)total_adds / (double)total_ops,
         (double)total_subs / (double)total_ops,
         (double)total_fp4 / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
-static long bench_fp16_inv_new_ns(int iters, bench_counts_t *counts){
+static long long bench_fp16_inv_new_ns(int iters, bench_counts_t *counts){
     fp16_t a, inv;
     fp16_init(&a); fp16_init(&inv);
     fp16_random(&a);
@@ -140,9 +140,9 @@ static long bench_fp16_inv_new_ns(int iters, bench_counts_t *counts){
         fp16_random(&a);
     }
     clock_gettime(CLOCK_MONOTONIC, &ed2);
-    long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
-    long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000L + (ed2.tv_nsec - st2.tv_nsec);
-    long ns = ns_ops - ns_init;
+    long long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000LL + (ed2.tv_nsec - st2.tv_nsec);
+    long long ns = ns_ops - ns_init;
     if (ns < 0) ns = 0;
     uint64_t muls = after - before;
     uint64_t adds = after_add - before_add;
@@ -164,9 +164,9 @@ static long bench_fp16_inv_new_ns(int iters, bench_counts_t *counts){
     return ns;
 }
 
-static long bench_fp16_inv_new_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs, uint64_t *fp4s){
+static long long bench_fp16_inv_new_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs, uint64_t *fp4s){
     bench_counts_t counts = {0};
-    long ns = bench_fp16_inv_new_ns(iters, &counts);
+    long long ns = bench_fp16_inv_new_ns(iters, &counts);
     if (muls) *muls = counts.muls;
     if (adds) *adds = counts.adds;
     if (subs) *subs = counts.subs;
@@ -174,7 +174,7 @@ static long bench_fp16_inv_new_run_ns(int iters, uint64_t *muls, uint64_t *adds,
     return ns;
 }
 
-long bench_fp16_inv_new_avg(int iters, int count){
+long long bench_fp16_inv_new_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count;
     unsigned long long total_muls = 0;
@@ -195,10 +195,10 @@ long bench_fp16_inv_new_avg(int iters, int count){
         (double)total_adds / (double)total_ops,
         (double)total_subs / (double)total_ops,
         (double)total_fp4 / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
-static long bench_fp16_inv_karatsuba_ns(int iters, bench_counts_t *counts){
+static long long bench_fp16_inv_karatsuba_ns(int iters, bench_counts_t *counts){
     fp16_t a, inv;
     fp16_init(&a); fp16_init(&inv);
     fp16_random(&a);
@@ -229,9 +229,9 @@ static long bench_fp16_inv_karatsuba_ns(int iters, bench_counts_t *counts){
         fp16_random(&a);
     }
     clock_gettime(CLOCK_MONOTONIC, &ed2);
-    long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
-    long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000L + (ed2.tv_nsec - st2.tv_nsec);
-    long ns = ns_ops - ns_init;
+    long long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000LL + (ed2.tv_nsec - st2.tv_nsec);
+    long long ns = ns_ops - ns_init;
     if (ns < 0) ns = 0;
     uint64_t muls_fp = after_fp - before_fp;
     uint64_t adds = after_add - before_add;
@@ -253,9 +253,9 @@ static long bench_fp16_inv_karatsuba_ns(int iters, bench_counts_t *counts){
     return ns;
 }
 
-static long bench_fp16_inv_karatsuba_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs, uint64_t *fp4ks){
+static long long bench_fp16_inv_karatsuba_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs, uint64_t *fp4ks){
     bench_counts_t counts = {0};
-    long ns = bench_fp16_inv_karatsuba_ns(iters, &counts);
+    long long ns = bench_fp16_inv_karatsuba_ns(iters, &counts);
     if (muls) *muls = counts.muls;
     if (adds) *adds = counts.adds;
     if (subs) *subs = counts.subs;
@@ -263,7 +263,7 @@ static long bench_fp16_inv_karatsuba_run_ns(int iters, uint64_t *muls, uint64_t 
     return ns;
 }
 
-long bench_fp16_inv_karatsuba_avg(int iters, int count){
+long long bench_fp16_inv_karatsuba_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count;
     unsigned long long total_muls = 0;
@@ -284,10 +284,10 @@ long bench_fp16_inv_karatsuba_avg(int iters, int count){
         (double)total_adds / (double)total_ops,
         (double)total_subs / (double)total_ops,
         (double)total_fp4k / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
-static long bench_fp16_inv_slow_ns(int iters, bench_counts_t *counts){
+static long long bench_fp16_inv_slow_ns(int iters, bench_counts_t *counts){
     fp16_t a, inv;
     fp16_init(&a); fp16_init(&inv);
     fp16_random(&a);
@@ -320,9 +320,9 @@ static long bench_fp16_inv_slow_ns(int iters, bench_counts_t *counts){
         fp16_random(&a);
     }
     clock_gettime(CLOCK_MONOTONIC, &ed2);
-    long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
-    long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000L + (ed2.tv_nsec - st2.tv_nsec);
-    long ns = ns_ops - ns_init;
+    long long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000LL + (ed2.tv_nsec - st2.tv_nsec);
+    long long ns = ns_ops - ns_init;
     if (ns < 0) ns = 0;
     uint64_t muls = after - before;
     uint64_t adds = after_add - before_add;
@@ -346,9 +346,9 @@ static long bench_fp16_inv_slow_ns(int iters, bench_counts_t *counts){
     return ns;
 }
 
-static long bench_fp16_inv_slow_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs, uint64_t *fp4slows){
+static long long bench_fp16_inv_slow_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs, uint64_t *fp4slows){
     bench_counts_t counts = {0};
-    long ns = bench_fp16_inv_slow_ns(iters, &counts);
+    long long ns = bench_fp16_inv_slow_ns(iters, &counts);
     if (muls) *muls = counts.muls;
     if (adds) *adds = counts.adds;
     if (subs) *subs = counts.subs;
@@ -356,7 +356,7 @@ static long bench_fp16_inv_slow_run_ns(int iters, uint64_t *muls, uint64_t *adds
     return ns;
 }
 
-long bench_fp16_inv_slow_avg(int iters, int count){
+long long bench_fp16_inv_slow_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count;
     unsigned long long total_muls = 0;
@@ -377,11 +377,11 @@ long bench_fp16_inv_slow_avg(int iters, int count){
         (double)total_adds / (double)total_ops,
         (double)total_subs / (double)total_ops,
         (double)total_fp4slow / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
 // ベンチマーク: fp4_mul を iters 回呼び出してナノ秒を返す
-static long bench_fp4_mul_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs){
+static long long bench_fp4_mul_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs){
     fp4_t a, b, acc;
     fp4_init(&a); fp4_init(&b); fp4_init(&acc);
     fp4_random(&a); fp4_random(&b);
@@ -402,15 +402,15 @@ static long bench_fp4_mul_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint
     uint64_t after_mul = fp_mul_count;
     uint64_t after_add = fp_add_count;
     uint64_t after_sub = fp_sub_count;
-    long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
 
     clock_gettime(CLOCK_MONOTONIC, &st2);
     for (int i = 0; i < iters; i++) {
         fp4_random(&a); fp4_random(&b);
     }
     clock_gettime(CLOCK_MONOTONIC, &ed2);
-    long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000L + (ed2.tv_nsec - st2.tv_nsec);
-    long ns = ns_ops - ns_init;
+    long long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000LL + (ed2.tv_nsec - st2.tv_nsec);
+    long long ns = ns_ops - ns_init;
     if (ns < 0) ns = 0;
 
     if (muls) *muls = after_mul - before_mul;
@@ -421,7 +421,7 @@ static long bench_fp4_mul_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint
     return ns;
 }
 
-long bench_fp4_mul_avg(int iters, int count){
+long long bench_fp4_mul_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count;
     unsigned long long total_muls = 0;
@@ -439,11 +439,11 @@ long bench_fp4_mul_avg(int iters, int count){
         (double)total_muls / (double)total_ops,
         (double)total_adds / (double)total_ops,
         (double)total_subs / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
 // ベンチマーク: fp4_mul_new を iters 回呼び出してナノ秒を返す
-static long bench_fp4_mul_new_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs){
+static long long bench_fp4_mul_new_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs){
     fp4_t a, b, acc;
     fp4_init(&a); fp4_init(&b); fp4_init(&acc);
     fp4_random(&a); fp4_random(&b);
@@ -464,15 +464,15 @@ static long bench_fp4_mul_new_run_ns(int iters, uint64_t *muls, uint64_t *adds, 
     uint64_t after_mul = fp_mul_count;
     uint64_t after_add = fp_add_count;
     uint64_t after_sub = fp_sub_count;
-    long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
 
     clock_gettime(CLOCK_MONOTONIC, &st2);
     for (int i = 0; i < iters; i++) {
         fp4_random(&a); fp4_random(&b);
     }
     clock_gettime(CLOCK_MONOTONIC, &ed2);
-    long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000L + (ed2.tv_nsec - st2.tv_nsec);
-    long ns = ns_ops - ns_init;
+    long long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000LL + (ed2.tv_nsec - st2.tv_nsec);
+    long long ns = ns_ops - ns_init;
     if (ns < 0) ns = 0;
 
     if (muls) *muls = after_mul - before_mul;
@@ -483,7 +483,7 @@ static long bench_fp4_mul_new_run_ns(int iters, uint64_t *muls, uint64_t *adds, 
     return ns;
 }
 
-long bench_fp4_mul_new_avg(int iters, int count){
+long long bench_fp4_mul_new_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count;
     unsigned long long total_muls = 0;
@@ -501,10 +501,10 @@ long bench_fp4_mul_new_avg(int iters, int count){
         (double)total_muls / (double)total_ops,
         (double)total_adds / (double)total_ops,
         (double)total_subs / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
-static long bench_fp4_mul_karatsuba_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs){
+static long long bench_fp4_mul_karatsuba_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs){
     fp4_t a, b, acc;
     fp4_init(&a); fp4_init(&b); fp4_init(&acc);
     fp4_random(&a); fp4_random(&b);
@@ -525,15 +525,15 @@ static long bench_fp4_mul_karatsuba_run_ns(int iters, uint64_t *muls, uint64_t *
     uint64_t after_mul = fp_mul_count;
     uint64_t after_add = fp_add_count;
     uint64_t after_sub = fp_sub_count;
-    long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
 
     clock_gettime(CLOCK_MONOTONIC, &st2);
     for (int i = 0; i < iters; i++) {
         fp4_random(&a); fp4_random(&b);
     }
     clock_gettime(CLOCK_MONOTONIC, &ed2);
-    long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000L + (ed2.tv_nsec - st2.tv_nsec);
-    long ns = ns_ops - ns_init;
+    long long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000LL + (ed2.tv_nsec - st2.tv_nsec);
+    long long ns = ns_ops - ns_init;
     if (ns < 0) ns = 0;
 
     if (muls) *muls = after_mul - before_mul;
@@ -544,7 +544,7 @@ static long bench_fp4_mul_karatsuba_run_ns(int iters, uint64_t *muls, uint64_t *
     return ns;
 }
 
-long bench_fp4_mul_karatsuba_avg(int iters, int count){
+long long bench_fp4_mul_karatsuba_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count;
     unsigned long long total_muls = 0;
@@ -562,10 +562,10 @@ long bench_fp4_mul_karatsuba_avg(int iters, int count){
         (double)total_muls / (double)total_ops,
         (double)total_adds / (double)total_ops,
         (double)total_subs / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
-static long bench_fp4_mul_slow_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs){
+static long long bench_fp4_mul_slow_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs){
     fp4_t a, b, acc;
     fp4_init(&a); fp4_init(&b); fp4_init(&acc);
     fp4_random(&a); fp4_random(&b);
@@ -586,15 +586,15 @@ static long bench_fp4_mul_slow_run_ns(int iters, uint64_t *muls, uint64_t *adds,
     uint64_t after_mul = fp_mul_count;
     uint64_t after_add = fp_add_count;
     uint64_t after_sub = fp_sub_count;
-    long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
 
     clock_gettime(CLOCK_MONOTONIC, &st2);
     for (int i = 0; i < iters; i++) {
         fp4_random(&a); fp4_random(&b);
     }
     clock_gettime(CLOCK_MONOTONIC, &ed2);
-    long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000L + (ed2.tv_nsec - st2.tv_nsec);
-    long ns = ns_ops - ns_init;
+    long long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000LL + (ed2.tv_nsec - st2.tv_nsec);
+    long long ns = ns_ops - ns_init;
     if (ns < 0) ns = 0;
 
     if (muls) *muls = after_mul - before_mul;
@@ -605,7 +605,7 @@ static long bench_fp4_mul_slow_run_ns(int iters, uint64_t *muls, uint64_t *adds,
     return ns;
 }
 
-long bench_fp4_mul_slow_avg(int iters, int count){
+long long bench_fp4_mul_slow_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count;
     unsigned long long total_muls = 0;
@@ -623,11 +623,11 @@ long bench_fp4_mul_slow_avg(int iters, int count){
         (double)total_muls / (double)total_ops,
         (double)total_adds / (double)total_ops,
         (double)total_subs / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
 // ベンチマーク: fp_add を iters 回呼び出してナノ秒を返す
-static long bench_fp_add_run_ns(int iters){
+static long long bench_fp_add_run_ns(int iters){
     fp_t acc;
     fp_init(&acc);
     size_t total_ops = (size_t)iters * (size_t)BENCH_UNROLL;
@@ -668,8 +668,8 @@ static long bench_fp_add_run_ns(int iters){
         fp_set(&acc, &as[0]);
     }
 
-    long ns_add = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
-    long ns = ns_add;
+    long long ns_add = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns = ns_add;
     if (ns < 0) ns = 0;
 
     free(as);
@@ -678,7 +678,7 @@ static long bench_fp_add_run_ns(int iters){
     return ns;
 }
 
-long bench_fp_add_avg(int iters, int count){
+long long bench_fp_add_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count * (long long)BENCH_UNROLL;
     for (int i = 0; i < count; i++) {
@@ -686,11 +686,11 @@ long bench_fp_add_avg(int iters, int count){
     }
     printf("[Bench] fp_add: %d cases x %d iters, %.2f ns/op\n",
         count, iters, (double)total_ns / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
 // ベンチマーク: fp_sub を iters 回呼び出してナノ秒を返す（毎回乱数）
-static long bench_fp_sub_run_ns(int iters){
+static long long bench_fp_sub_run_ns(int iters){
     fp_t acc;
     fp_init(&acc);
     size_t total_ops = (size_t)iters * (size_t)BENCH_UNROLL;
@@ -731,8 +731,8 @@ static long bench_fp_sub_run_ns(int iters){
         fp_set(&acc, &as[0]);
     }
 
-    long ns_sub = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
-    long ns = ns_sub;
+    long long ns_sub = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns = ns_sub;
     if (ns < 0) ns = 0;
 
     free(as);
@@ -741,7 +741,7 @@ static long bench_fp_sub_run_ns(int iters){
     return ns;
 }
 
-long bench_fp_sub_avg(int iters, int count){
+long long bench_fp_sub_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count * (long long)BENCH_UNROLL;
     for (int i = 0; i < count; i++) {
@@ -749,11 +749,11 @@ long bench_fp_sub_avg(int iters, int count){
     }
     printf("[Bench] fp_sub: %d cases x %d iters, %.2f ns/op\n",
         count, iters, (double)total_ns / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
 // ベンチマーク: fp_mul を iters 回呼び出してナノ秒を返す（毎回乱数）
-static long bench_fp_mul_run_ns(int iters){
+static long long bench_fp_mul_run_ns(int iters){
     fp_t acc;
     fp_init(&acc);
     size_t total_ops = (size_t)iters * (size_t)BENCH_UNROLL;
@@ -794,8 +794,8 @@ static long bench_fp_mul_run_ns(int iters){
         fp_set(&acc, &as[0]);
     }
 
-    long ns_mul = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
-    long ns = ns_mul;
+    long long ns_mul = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns = ns_mul;
     if (ns < 0) ns = 0;
 
     free(as);
@@ -804,7 +804,7 @@ static long bench_fp_mul_run_ns(int iters){
     return ns;
 }
 
-long bench_fp_mul_avg(int iters, int count){
+long long bench_fp_mul_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count * (long long)BENCH_UNROLL;
     for (int i = 0; i < count; i++) {
@@ -812,11 +812,11 @@ long bench_fp_mul_avg(int iters, int count){
     }
     printf("[Bench] fp_mul: %d cases x %d iters, %.2f ns/op\n",
         count, iters, (double)total_ns / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
 // ベンチマーク: fp_add_plus を iters 回呼び出してナノ秒を返す
-static long bench_fp_add_plus_run_ns(int iters){
+static long long bench_fp_add_plus_run_ns(int iters){
     fp_t acc;
     fp_init(&acc);
     size_t total_ops = (size_t)iters * (size_t)BENCH_UNROLL;
@@ -857,8 +857,8 @@ static long bench_fp_add_plus_run_ns(int iters){
         fp_set(&acc, &as[0]);
     }
 
-    long ns_add = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
-    long ns = ns_add;
+    long long ns_add = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns = ns_add;
     if (ns < 0) ns = 0;
 
     free(as);
@@ -867,7 +867,7 @@ static long bench_fp_add_plus_run_ns(int iters){
     return ns;
 }
 
-long bench_fp_add_plus_avg(int iters, int count){
+long long bench_fp_add_plus_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count * (long long)BENCH_UNROLL;
     for (int i = 0; i < count; i++) {
@@ -875,11 +875,11 @@ long bench_fp_add_plus_avg(int iters, int count){
     }
     printf("[Bench] fp_add_plus: %d cases x %d iters, %.2f ns/op\n",
         count, iters, (double)total_ns / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
 // ベンチマーク: fp_sub_plus を iters 回呼び出してナノ秒を返す（毎回乱数）
-static long bench_fp_sub_plus_run_ns(int iters){
+static long long bench_fp_sub_plus_run_ns(int iters){
     fp_t acc;
     fp_init(&acc);
     size_t total_ops = (size_t)iters * (size_t)BENCH_UNROLL;
@@ -920,8 +920,8 @@ static long bench_fp_sub_plus_run_ns(int iters){
         fp_set(&acc, &as[0]);
     }
 
-    long ns_sub = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
-    long ns = ns_sub;
+    long long ns_sub = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns = ns_sub;
     if (ns < 0) ns = 0;
 
     free(as);
@@ -930,7 +930,7 @@ static long bench_fp_sub_plus_run_ns(int iters){
     return ns;
 }
 
-long bench_fp_sub_plus_avg(int iters, int count){
+long long bench_fp_sub_plus_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count * (long long)BENCH_UNROLL;
     for (int i = 0; i < count; i++) {
@@ -938,11 +938,11 @@ long bench_fp_sub_plus_avg(int iters, int count){
     }
     printf("[Bench] fp_sub_plus: %d cases x %d iters, %.2f ns/op\n",
         count, iters, (double)total_ns / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
 // ベンチマーク: fp_mul_plus を iters 回呼び出してナノ秒を返す（毎回乱数）
-static long bench_fp_mul_plus_run_ns(int iters){
+static long long bench_fp_mul_plus_run_ns(int iters){
     fp_t acc;
     fp_init(&acc);
     size_t total_ops = (size_t)iters * (size_t)BENCH_UNROLL;
@@ -983,8 +983,8 @@ static long bench_fp_mul_plus_run_ns(int iters){
         fp_set(&acc, &as[0]);
     }
 
-    long ns_mul = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
-    long ns = ns_mul;
+    long long ns_mul = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns = ns_mul;
     if (ns < 0) ns = 0;
 
     free(as);
@@ -993,7 +993,7 @@ static long bench_fp_mul_plus_run_ns(int iters){
     return ns;
 }
 
-long bench_fp_mul_plus_avg(int iters, int count){
+long long bench_fp_mul_plus_avg(int iters, int count){
     long long total_ns = 0;
     long long total_ops = (long long)iters * (long long)count * (long long)BENCH_UNROLL;
     for (int i = 0; i < count; i++) {
@@ -1001,10 +1001,10 @@ long bench_fp_mul_plus_avg(int iters, int count){
     }
     printf("[Bench] fp_mul_plus: %d cases x %d iters, %.2f ns/op\n",
         count, iters, (double)total_ns / (double)total_ops);
-    return (long)(total_ns / count);
+    return (long long)(total_ns / count);
 }
 
-// static long bench_matrix_round_p_ns(int iters, int inv_mode, bench_counts_t *counts){
+// static long long bench_matrix_round_p_ns(int iters, int inv_mode, bench_counts_t *counts){
 //     state_t s;
 //     state_init(&s);
 //     state_random(&s);
@@ -1034,9 +1034,9 @@ long bench_fp_mul_plus_avg(int iters, int count){
 //         state_random(&s);
 //     }
 //     clock_gettime(CLOCK_MONOTONIC, &ed2);
-//     long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000L + (ed1.tv_nsec - st1.tv_nsec);
-//     long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000L + (ed2.tv_nsec - st2.tv_nsec);
-//     long ns = ns_ops - ns_init;
+//     long long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
+//     long long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000LL + (ed2.tv_nsec - st2.tv_nsec);
+//     long long ns = ns_ops - ns_init;
 //     if (ns < 0) ns = 0;
 
 //     if (counts) {
@@ -1052,11 +1052,11 @@ long bench_fp_mul_plus_avg(int iters, int count){
 //     return ns;
 // }
 
-// static long bench_matrix_round_p_run_ns(int iters, int inv_mode,
+// static long long bench_matrix_round_p_run_ns(int iters, int inv_mode,
 //                                         uint64_t *muls, uint64_t *adds,
 //                                         uint64_t *subs, uint64_t *fp4s){
 //     bench_counts_t counts = {0};
-//     long ns = bench_matrix_round_p_ns(iters, inv_mode, &counts);
+//     long long ns = bench_matrix_round_p_ns(iters, inv_mode, &counts);
 //     if (muls) *muls = counts.muls;
 //     if (adds) *adds = counts.adds;
 //     if (subs) *subs = counts.subs;
@@ -1064,7 +1064,7 @@ long bench_fp_mul_plus_avg(int iters, int count){
 //     return ns;
 // }
 
-// static long bench_matrix_round_p_avg(int iters, int count, int inv_mode, const char *label){
+// static long long bench_matrix_round_p_avg(int iters, int count, int inv_mode, const char *label){
 //     long long total_ns = 0;
 //     long long total_ops = (long long)iters * (long long)count;
 //     unsigned long long total_muls = 0;
@@ -1085,17 +1085,17 @@ long bench_fp_mul_plus_avg(int iters, int count){
 //         (double)total_adds / (double)total_ops,
 //         (double)total_subs / (double)total_ops,
 //         (double)total_fp4 / (double)total_ops);
-//     return (long)(total_ns / count);
+//     return (long long)(total_ns / count);
 // }
 
-// long bench_matrix_round_p_inv_avg(int iters, int count){
+// long long bench_matrix_round_p_inv_avg(int iters, int count){
 //     return bench_matrix_round_p_avg(iters, count, 0, "inv");
 // }
 
-// long bench_matrix_round_p_inv_new_avg(int iters, int count){
+// long long bench_matrix_round_p_inv_new_avg(int iters, int count){
 //     return bench_matrix_round_p_avg(iters, count, 1, "inv_new");
 // }
 
-// long bench_matrix_round_p_inv_karatsuba_avg(int iters, int count){
+// long long bench_matrix_round_p_inv_karatsuba_avg(int iters, int count){
 //     return bench_matrix_round_p_avg(iters, count, 2, "inv_karatsuba");
 // }

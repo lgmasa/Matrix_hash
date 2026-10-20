@@ -1,4 +1,7 @@
 #include "16_header.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 void test_pack_127(void){
     field_select_for_output(512);   // FP_BITS=127
 
@@ -39,6 +42,10 @@ void test_pack_127(void){
 }
 
 int main(void){
+    #ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);   // コンソール出力を UTF-8 にする（文字化け対策）
+    #endif
+    
     uint32_t p_mer = P_MERSENNE;
     uint32_t p_pri = P_PRIME;
     // printf("p_mer : %u\n",p_mer); //この段階では規定値が入っている

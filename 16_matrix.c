@@ -1096,29 +1096,29 @@ static void dbg_check_inverse(void){
  
 /* (5) MDS 検算 */
 static void dbg_check_mds(void){
-    long p=(1L<<31)-1, row[4]={1,1,2,8}, M[4][4];
+    long long p=(1LL<<31)-1, row[4]={1,1,2,8}, M[4][4];
     for(int i=0;i<4;i++) for(int j=0;j<4;j++) M[i][j]=row[(j-i+4)%4];
     int mds=1;
     for(int i=0;i<4;i++) for(int j=0;j<4;j++){ if(M[i][j]%p==0) mds=0; }
     int c2[6][2]={{0,1},{0,2},{0,3},{1,2},{1,3},{2,3}};
     for(int a=0;a<6;a++) for(int b=0;b<6;b++){
-        long d=((M[c2[a][0]][c2[b][0]]*M[c2[a][1]][c2[b][1]]
+        long long d=((M[c2[a][0]][c2[b][0]]*M[c2[a][1]][c2[b][1]]
                 -M[c2[a][0]][c2[b][1]]*M[c2[a][1]][c2[b][0]])%p+p)%p;
         if(d==0) mds=0;
     }
     int c3[4][3]={{0,1,2},{0,1,3},{0,2,3},{1,2,3}};
     int pm[6][3]={{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}}, sg[6]={1,-1,-1,1,1,-1};
     for(int a=0;a<4;a++) for(int b=0;b<4;b++){
-        long det=0;
-        for(int q=0;q<6;q++){ long tm=sg[q];
+        long long det=0;
+        for(int q=0;q<6;q++){ long long tm=sg[q];
             for(int x=0;x<3;x++) tm=(tm*(M[c3[a][x]][c3[b][pm[q][x]]]%p))%p;
             det=(det+tm)%p; }
         det=((det%p)+p)%p; if(det==0) mds=0;
     }
-    { long det=0; int s4[4]={1,-1,1,-1};
+    { long long det=0; int s4[4]={1,-1,1,-1};
       for(int c0=0;c0<4;c0++){ int sc[3],t=0; for(int j=0;j<4;j++) if(j!=c0) sc[t++]=j;
-        int sr[3]={1,2,3}; long m3=0;
-        for(int q=0;q<6;q++){ long tm=sg[q];
+        int sr[3]={1,2,3}; long long m3=0;
+        for(int q=0;q<6;q++){ long long tm=sg[q];
             for(int x=0;x<3;x++) tm=(tm*(M[sr[x]][sc[pm[q][x]]]%p))%p; m3=(m3+tm)%p; }
         det=(det+s4[c0]*(M[0][c0]%p)*(((m3%p)+p)%p))%p; }
       det=((det%p)+p)%p; if(det==0) mds=0; }
@@ -1219,14 +1219,14 @@ int matrix_hash_test(uint8_t *digest, size_t digest_len, const uint8_t *msg, siz
 
     /* --- TEST 3: MDS (MixBytes) circ(1,1,2,8) が branch number 5 --- */
     {
-        long p = (1L<<31)-1;
-        long row[4] = {1,1,2,8}, M[4][4];
+        long long p = (1LL<<31)-1;
+        long long row[4] = {1,1,2,8}, M[4][4];
         for(int i=0;i<4;i++) for(int j=0;j<4;j++) M[i][j]=row[(j-i+4)%4];
         int mds = 1, checked = 0;
         int c2[6][2]={{0,1},{0,2},{0,3},{1,2},{1,3},{2,3}};
         for(int i=0;i<4;i++) for(int j=0;j<4;j++){ checked++; if(M[i][j]%p==0) mds=0; }
         for(int a=0;a<6;a++) for(int b=0;b<6;b++){
-            long d=((M[c2[a][0]][c2[b][0]]%p)*(M[c2[a][1]][c2[b][1]]%p)
+            long long d=((M[c2[a][0]][c2[b][0]]%p)*(M[c2[a][1]][c2[b][1]]%p)
                   -(M[c2[a][0]][c2[b][1]]%p)*(M[c2[a][1]][c2[b][0]]%p))%p;
             d=((d%p)+p)%p; checked++; if(d==0) mds=0;
         }
@@ -1234,16 +1234,16 @@ int matrix_hash_test(uint8_t *digest, size_t digest_len, const uint8_t *msg, siz
         int pm[6][3]={{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}};
         int sg[6]={1,-1,-1,1,1,-1};
         for(int a=0;a<4;a++) for(int b=0;b<4;b++){
-            long det=0;
-            for(int pp=0;pp<6;pp++){ long term=sg[pp];
+            long long det=0;
+            for(int pp=0;pp<6;pp++){ long long term=sg[pp];
                 for(int x=0;x<3;x++) term=(term*(M[c3[a][x]][c3[b][pm[pp][x]]]%p))%p;
                 det=(det+term)%p; }
             det=((det%p)+p)%p; checked++; if(det==0) mds=0;
         }
-        { long det=0; int sign4[4]={1,-1,1,-1};
+        { long long det=0; int sign4[4]={1,-1,1,-1};
           for(int c0=0;c0<4;c0++){ int sc[3],t=0; for(int j=0;j<4;j++) if(j!=c0) sc[t++]=j;
-            int sr[3]={1,2,3}; long m3=0;
-            for(int pp=0;pp<6;pp++){ long term=sg[pp];
+            int sr[3]={1,2,3}; long long m3=0;
+            for(int pp=0;pp<6;pp++){ long long term=sg[pp];
                 for(int x=0;x<3;x++) term=(term*(M[sr[x]][sc[pm[pp][x]]]%p))%p;
                 m3=(m3+term)%p; }
             det=(det+sign4[c0]*(M[0][c0]%p)*(((m3%p)+p)%p))%p; }

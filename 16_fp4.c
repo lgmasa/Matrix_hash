@@ -560,6 +560,22 @@ void fp4_inv_new(fp4_t *S, const fp4_t *X){
     fp4_mul_new(S, &numerator, &norm);
 }
 
+// mpz の _ui 系関数は unsigned long を取る(Windows では 32bit, Linux でも 64bit)ため、
+// u128 の P_MERSENNE や 2^32 を超える uint64_t を直接渡すと切り詰められる。以下の2関数で回避する。
+
+// p = 2^FP_BITS - 1 をセット
+static void mpz_set_p_mersenne(mpz_t p){
+    mpz_ui_pow_ui(p, 2, FP_BITS);
+    mpz_sub_ui(p, p, 1);
+}
+
+// uint64_t を 32bit ずつに分けてセット
+static void mpz_set_u64(mpz_t z, uint64_t v){
+    mpz_set_ui(z, (unsigned long)(v >> 32));
+    mpz_mul_2exp(z, z, 32);
+    mpz_add_ui(z, z, (unsigned long)(v & 0xFFFFFFFFu));
+}
+
 // quartic residue 判定: x^{(p^4-1)/4} = 1 なら4乗根が存在
 int fp4_has_4th_root(const fp4_t *X){
     // 0 は自明に4乗根 (0) を持つ
@@ -568,7 +584,8 @@ int fp4_has_4th_root(const fp4_t *X){
     }
 
     mpz_t p, exp;
-    mpz_init_set_ui(p, P_MERSENNE);
+    mpz_init(p);
+    mpz_set_p_mersenne(p);
     mpz_init(exp);
 
     // exp = (p^4 - 1) / 4
@@ -614,7 +631,8 @@ int fp4_is_square(const fp4_t *X){
         return 1;
     }
     mpz_t p, exp;
-    mpz_init_set_ui(p, P_MERSENNE);
+    mpz_init(p);
+    mpz_set_p_mersenne(p);
     mpz_init(exp);
 
     // exp = (p^4 - 1) / 2
@@ -676,7 +694,8 @@ void fp4_order(mpz_t order, const fp4_t *X){
 
     // group order = p^4 - 1
     mpz_t ord, p, exp;
-    mpz_init_set_ui(p, P_MERSENNE);
+    mpz_init(p);
+    mpz_set_p_mersenne(p);
     mpz_init(ord);
     mpz_pow_ui(ord, p, 4);
     mpz_sub_ui(ord, ord, 1);
@@ -688,11 +707,13 @@ void fp4_order(mpz_t order, const fp4_t *X){
     const uint64_t primes[] = {2ULL,3ULL,5ULL,7ULL,11ULL,31ULL,151ULL,331ULL,733ULL,1709ULL,368140581013ULL};
     size_t plen = sizeof(primes)/sizeof(primes[0]);
 
+    mpz_t q;
     mpz_init(exp);
+    mpz_init(q);
     for(size_t i=0;i<plen;i++){
-        uint64_t q = primes[i];
-        while(mpz_divisible_ui_p(ord, q)){
-            mpz_divexact_ui(exp, ord, q);
+        mpz_set_u64(q, primes[i]); // 368140581013 > 2^32 なので _ui 系は使わない
+        while(mpz_divisible_p(ord, q)){
+            mpz_divexact(exp, ord, q);
             fp4_pow(&tmp, X, exp);
             if (fp4_is_equal(&tmp, &one)){
                 mpz_set(ord, exp); // 位数を更新
@@ -706,6 +727,7 @@ void fp4_order(mpz_t order, const fp4_t *X){
     mpz_clear(p);
     mpz_clear(ord);
     mpz_clear(exp);
+    mpz_clear(q);
 }
 
 int fp4_is_scalar(const fp4_t *X){
