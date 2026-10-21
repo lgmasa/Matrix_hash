@@ -54,6 +54,7 @@ void fp_add_plus(fp_t *S, const fp_t *X, const fp_t *Y);
 void fp_sub_plus(fp_t *S, const fp_t *X, const fp_t *Y);
 void fp_mul_plus(fp_t *S, const fp_t *X, const fp_t *Y);
 void fp_inv(fp_t *S, const fp_t *X);
+void fp_inv_xgcd(fp_t *S, const fp_t *X); // 拡張ユークリッド互除法による逆元 (fp_mul を使わない)
 void fp_pow(fp_t *S, const fp_t *X, const mpz_t s);
 int fp_legendre(const fp_t *a);
 int fp_sqrt(fp_t *b, fp_t *a);
@@ -86,10 +87,13 @@ void fp4_mul_karatsuba(fp4_t *R, const fp4_t *A, const fp4_t *B);
 void fp4_sqr(fp4_t *S, const fp4_t *X);
 void fp4_frobenius_map(fp4_t *S, const fp4_t *X); // p乗写像 (高速)
 void fp4_pow(fp4_t *S, const fp4_t *X, const mpz_t exp);
-void fp4_inv(fp4_t *S, const fp4_t *X); // p^4-2 乗による単純な逆元
+void fp4_pow_naive(fp4_t *S, const fp4_t *X, const mpz_t exp); // 乗算に naive 法 (fp4_mul_slow) を使うべき乗
+void fp4_inv(fp4_t *S, const fp4_t *X);
 void fp4_inv_slow(fp4_t *S, const fp4_t *X);
 void fp4_inv_karatsuba(fp4_t *S, const fp4_t *X);
 void fp4_inv_new(fp4_t *S, const fp4_t *X);
+void fp4_inv_xgcd(fp4_t *S, const fp4_t *X); // 拡張ユークリッド互除法による逆元
+void fp4_inv_naive(fp4_t *S, const fp4_t *X); // X^(p^4-2) を fp4_pow_naive で計算する愚直な逆元
 void fp4_neg(fp4_t *S, const fp4_t *X);
 int fp4_has_4th_root(const fp4_t *X); // x^{(p^4-1)/4} == 1 をチェック
 void fp4_quartic_residue_scan(int trials); // ランダム試行で4乗非剰余を探す
@@ -131,9 +135,12 @@ void fp16_inv(fp16_t *S, const fp16_t *X);
 void fp16_inv_new(fp16_t *S, const fp16_t *X);
 void fp16_inv_slow(fp16_t *S, const fp16_t *X);
 void fp16_inv_karatsuba(fp16_t *S, const fp16_t *X);
+void fp16_inv_xgcd(fp16_t *S, const fp16_t *X); // 拡張ユークリッド互除法による逆元
 int fp16_is_scalar(const fp16_t *X);
 void fp16_pow_slow(fp16_t *S, const fp16_t *X, const mpz_t exp);
 void fp16_inv_naive_check(size_t n_bits);
+void fp16_inv_xgcd_check(size_t n_bits, int trials);
+void fp16_inv_opcount_check(size_t n_bits, int trials); // 逆元計算の mul/add/sub 回数を表示
 
 typedef struct{
     fp_t m[4][4];
@@ -302,6 +309,7 @@ long long bench_fp16_inv_avg(int iters, int count);
 long long bench_fp16_inv_new_avg(int iters, int count);
 long long bench_fp16_inv_karatsuba_avg(int iters, int count);
 long long bench_fp16_inv_slow_avg(int iters, int count);
+long long bench_fp16_inv_xgcd_avg(int iters, int count);
 // long long bench_matrix_round_p_inv_avg(int iters, int count);
 // long long bench_matrix_round_p_inv_new_avg(int iters, int count);
 // long long bench_matrix_round_p_inv_karatsuba_avg(int iters, int count);
@@ -311,5 +319,11 @@ extern uint64_t fp_sub_count;
 extern uint64_t fp4_mul_count;
 extern uint64_t fp4_mul_karatsuba_count;
 extern uint64_t fp4_mul_slow_count;
+extern uint64_t fp_inv_xgcd_count;
+extern uint64_t fp_xgcd_div_count;
+extern uint64_t fp4_inv_xgcd_count;
+extern uint64_t fp4_inv_naive_count;
+extern uint64_t fp4_inv_count;
+extern uint64_t fp_inv_count;
 
 #endif

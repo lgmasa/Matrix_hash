@@ -380,6 +380,98 @@ long long bench_fp16_inv_slow_avg(int iters, int count){
     return (long long)(total_ns / count);
 }
 
+// ベンチマーク: fp16_inv_xgcd を iters 回呼び出してナノ秒を返す
+static long long bench_fp16_inv_xgcd_ns(int iters, bench_counts_t *counts, uint64_t *fpinvs){
+    fp16_t a, inv;
+    fp16_init(&a); fp16_init(&inv);
+    fp16_random(&a);
+
+    // ウォームアップ
+    fp16_inv_xgcd(&inv, &a);
+
+    volatile uint32_t sink = 0; // 最適化抑止用
+    uint64_t before = fp_mul_count;
+    uint64_t before_add = fp_add_count;
+    uint64_t before_sub = fp_sub_count;
+    uint64_t before_fp4_slow = fp4_mul_slow_count;
+    uint64_t before_fpinv = fp_inv_count;
+    struct timespec st1, ed1, st2, ed2;
+    clock_gettime(CLOCK_MONOTONIC, &st1);
+    for(int i=0;i<iters;i++){
+        fp16_random(&a);
+        fp16_inv_xgcd(&inv, &a);
+        sink ^= inv.x0.x0.x0;
+    }
+    clock_gettime(CLOCK_MONOTONIC, &ed1);
+    uint64_t after = fp_mul_count;
+    uint64_t after_add = fp_add_count;
+    uint64_t after_sub = fp_sub_count;
+    uint64_t after_fp4_slow = fp4_mul_slow_count;
+    uint64_t after_fpinv = fp_inv_count;
+
+    clock_gettime(CLOCK_MONOTONIC, &st2);
+    for(int i=0;i<iters;i++){
+        fp16_random(&a);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &ed2);
+    long long ns_ops = (ed1.tv_sec - st1.tv_sec) * 1000000000LL + (ed1.tv_nsec - st1.tv_nsec);
+    long long ns_init = (ed2.tv_sec - st2.tv_sec) * 1000000000LL + (ed2.tv_nsec - st2.tv_nsec);
+    long long ns = ns_ops - ns_init;
+    if (ns < 0) ns = 0;
+
+    if (counts) {
+        counts->muls = after - before;
+        counts->adds = after_add - before_add;
+        counts->subs = after_sub - before_sub;
+        counts->fp4slow = after_fp4_slow - before_fp4_slow;
+    }
+    if (fpinvs) *fpinvs = after_fpinv - before_fpinv;
+
+    if (sink == 0xFFFFFFFF) { // 実際は起きないが最適化を抑止
+        fp16_set(&a, &inv);
+    }
+
+    fp16_clear(&a); fp16_clear(&inv);
+    return ns;
+}
+
+static long long bench_fp16_inv_xgcd_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs, uint64_t *fp4slows, uint64_t *fpinvs){
+    bench_counts_t counts = {0};
+    long long ns = bench_fp16_inv_xgcd_ns(iters, &counts, fpinvs);
+    if (muls) *muls = counts.muls;
+    if (adds) *adds = counts.adds;
+    if (subs) *subs = counts.subs;
+    if (fp4slows) *fp4slows = counts.fp4slow;
+    return ns;
+}
+
+long long bench_fp16_inv_xgcd_avg(int iters, int count){
+    long long total_ns = 0;
+    long long total_ops = (long long)iters * (long long)count;
+    unsigned long long total_muls = 0;
+    unsigned long long total_adds = 0;
+    unsigned long long total_subs = 0;
+    unsigned long long total_fp4slow = 0;
+    unsigned long long total_fpinv = 0;
+    for (int i = 0; i < count; i++) {
+        uint64_t muls = 0, adds = 0, subs = 0, fp4slows = 0, fpinvs = 0;
+        total_ns += bench_fp16_inv_xgcd_run_ns(iters, &muls, &adds, &subs, &fp4slows, &fpinvs);
+        total_muls += muls;
+        total_adds += adds;
+        total_subs += subs;
+        total_fp4slow += fp4slows;
+        total_fpinv += fpinvs;
+    }
+    printf("[Bench] fp16_inv_xgcd: %d cases x %d iters, %.2f ns/op, muls/op: %.2f, adds/op: %.2f, subs/op: %.2f, fp4_mul_slow/op: %.2f, fp_inv/op: %.2f\n",
+        count, iters, (double)total_ns / (double)total_ops,
+        (double)total_muls / (double)total_ops,
+        (double)total_adds / (double)total_ops,
+        (double)total_subs / (double)total_ops,
+        (double)total_fp4slow / (double)total_ops,
+        (double)total_fpinv / (double)total_ops);
+    return (long long)(total_ns / count);
+}
+
 // ベンチマーク: fp4_mul を iters 回呼び出してナノ秒を返す
 static long long bench_fp4_mul_run_ns(int iters, uint64_t *muls, uint64_t *adds, uint64_t *subs){
     fp4_t a, b, acc;

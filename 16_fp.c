@@ -223,8 +223,11 @@ void fp_mul_plus(fp_t *S, const fp_t *X, const fp_t *Y){
     S->x0 = reduce_mod(prod);
 }
 
+uint64_t fp_inv_count = 0; // fp_inv の呼び出し回数
+
 // 逆数 S = 1 / X
 void fp_inv(fp_t *S, const fp_t *X){
+    fp_inv_count++;
     if (X->x0 == 0) {
         printf("/0 is not defined\n");
         return;
@@ -238,8 +241,42 @@ void fp_inv(fp_t *S, const fp_t *X){
     mpz_sub_ui(exp, exp, 2); // p - 2
     
     fp_pow(S, X, exp);
-    
+
     mpz_clear(exp);
+}
+
+uint64_t fp_inv_xgcd_count = 0; // fp_inv_xgcd の呼び出し回数
+uint64_t fp_xgcd_div_count = 0; // fp_inv_xgcd 内の整数除算(互除法のステップ)回数
+
+// 逆数 S = 1 / X (拡張ユークリッド互除法)
+// r0 = p, r1 = x として互除法を行い、t_i * x ≡ r_i (mod p) を満たす t_i を追跡する。
+// t_i の符号は交互 (t_1 = 1 > 0, t_2 < 0, t_3 > 0, ...) で |t_{i+1}| = |t_{i-1}| + q_i * |t_i| となるので、
+// 絶対値だけを u128 で持てばよい (|t_i| <= p なので 2^127-1 でもオーバーフローしない)。
+// 整数の除算・乗算だけで計算し、素体乗算 fp_mul は使わない。
+void fp_inv_xgcd(fp_t *S, const fp_t *X){
+    fp_inv_xgcd_count++;
+    if (X->x0 == 0) {
+        printf("/0 is not defined\n");
+        fp_set_zero(S);
+        return;
+    }
+
+    u128 r0 = P_MERSENNE, r1 = X->x0;
+    u128 t0 = 0, t1 = 1; // |t_{i-1}|, |t_i|
+    int neg = 0;         // t_i が負なら 1
+
+    // p は素数なので gcd = 1 となり、余りは必ず 1 に到達する
+    while (r1 != 1) {
+        fp_xgcd_div_count++;
+        u128 q  = r0 / r1;
+        u128 r2 = r0 - q * r1;
+        u128 t2 = t0 + q * t1;
+        r0 = r1; r1 = r2;
+        t0 = t1; t1 = t2;
+        neg ^= 1;
+    }
+    // t_i * x ≡ 1 (mod p)
+    S->x0 = neg ? P_MERSENNE - t1 : t1;
 }
 
 // 冪乗 S = X ** s

@@ -105,7 +105,17 @@ int main(void){
     state_clear(&MDS);
     affine16_clear(&AFF);
 
-    fp16_inv_naive_check(256);
+    // fp16_inv_naive_check(256);
+    // fp16_inv_xgcd_check(256, 1000);
+    fp16_inv_opcount_check(256, 1000);
+
+    // 実行時間の計測 (p = 2^31 - 1)
+    bench_fp16_inv_xgcd_avg(1000, 10);
+    bench_fp16_inv_avg(1000, 10);
+    bench_fp16_inv_new_avg(1000, 10);
+    bench_fp_mul_avg(1000, 10);
+    bench_fp_add_avg(1000, 10);
+    bench_fp_sub_avg(1000, 10);
 
     return 0;
 }

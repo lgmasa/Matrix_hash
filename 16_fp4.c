@@ -408,9 +408,56 @@ void fp4_pow(fp4_t *S, const fp4_t *X, const mpz_t exp){
     fp4_set(S, &result);
 }
 
+// 繰り返し2乗法によるべき乗 (乗算・2乗とも naive 法の fp4_mul_slow を使う)
+void fp4_pow_naive(fp4_t *S, const fp4_t *X, const mpz_t exp){
+    fp4_t result, base;
+    fp4_set_ui(&result, 1);
+    fp4_set(&base, X);
+
+    size_t bit_len = mpz_sizeinbase(exp, 2);
+    for (size_t i = 0; i < bit_len; i++) {
+        if (mpz_tstbit(exp, i)) {
+            fp4_mul_slow(&result, &result, &base);
+        }
+        fp4_mul_slow(&base, &base, &base);
+    }
+    fp4_set(S, &result);
+}
+
+uint64_t fp4_inv_naive_count = 0; // fp4_inv_naive の呼び出し回数
+
+// 逆元 S = 1/X (愚直法)
+// フェルマーの小定理より X^(p^4-1) = 1 なので X^(-1) = X^(p^4-2) を fp4_pow_naive で計算する
+void fp4_inv_naive(fp4_t *S, const fp4_t *X){
+    fp4_inv_naive_count++;
+    if (fp4_is_zero(X)) {
+        // 0の逆元はないので 0 を返す
+        fp4_set_zero(S);
+        return;
+    }
+
+    // 指数 e = p^4 - 2
+    mpz_t p, e;
+    mpz_init(p);
+    mpz_init(e);
+    mpz_ui_pow_ui(p, 2, FP_BITS);
+    mpz_sub_ui(p, p, 1);
+    mpz_pow_ui(e, p, 4);
+    mpz_sub_ui(e, e, 2);
+
+    // fp4_pow_naive(S, X, e);
+    fp4_pow(S, X, e);
+
+    mpz_clear(p);
+    mpz_clear(e);
+}
+
+uint64_t fp4_inv_count = 0; // fp4_inv の呼び出し回数
+
 // 逆元 S = 1/X
 // X^(-1) = (X^p * X^(p^2) * X^(p^3)) / Norm(X)
 void fp4_inv(fp4_t *S, const fp4_t *X){
+    fp4_inv_count++;
     fp4_t t1, t2, numerator, norm;
     // 変数の初期化は構造体定義によるが、今回は代入で上書きされるので不要
     
@@ -558,6 +605,104 @@ void fp4_inv_new(fp4_t *S, const fp4_t *X){
     fp_set(&norm.x3, &norm.x0);
     
     fp4_mul_new(S, &numerator, &norm);
+}
+
+// ---- xgcd 用: F_p[γ] の多項式 (次数 4 以下, c[i] が γ^i の係数) ----
+typedef struct{
+    fp_t c[5];
+    int deg; // 零多項式は -1
+} fp_poly_t;
+
+static void fp_poly_set_zero(fp_poly_t *P){
+    for (int i = 0; i < 5; i++) fp_set_zero(&P->c[i]);
+    P->deg = -1;
+}
+
+// 最高次の係数が 0 なら次数を下げる
+static void fp_poly_normalize(fp_poly_t *P){
+    while (P->deg >= 0 && fp_is_zero(&P->c[P->deg])) P->deg--;
+}
+
+uint64_t fp4_inv_xgcd_count = 0; // fp4_inv_xgcd の呼び出し回数
+
+// 逆元 S = 1/X (拡張ユークリッド互除法)
+// F_{p^4} = F_p[γ]/(Φ5(γ)), Φ5(γ) = γ^4 + γ^3 + γ^2 + γ + 1 なので、
+// X を多項式基底 {1, γ, γ^2, γ^3} に直して X(γ) と Φ5(γ) に互除法を適用し、
+//   T(γ) * X(γ) ≡ g (mod Φ5)   (g は F_p の非零定数)
+// を満たす T を求めて S = T / g とする。各段で t_i * X ≡ r_i (mod Φ5) が保たれる。
+// 係数の逆元は fp_inv (p-2 乗、ITA 側と共通)、係数の積は fp_mul を使う。
+void fp4_inv_xgcd(fp4_t *S, const fp4_t *X){
+    fp4_inv_xgcd_count++;
+    if (fp4_is_zero(X)) {
+        // 0の逆元はないので 0 を返す
+        fp4_set_zero(S);
+        return;
+    }
+
+    fp_poly_t r0, r1, t0, t1, swap;
+    fp_t lc_inv, q, tmp;
+
+    // r0 = Φ5 = 1 + γ + γ^2 + γ^3 + γ^4, t0 = 0
+    fp_poly_set_zero(&r0);
+    for (int i = 0; i < 5; i++) fp_set_ui(&r0.c[i], 1);
+    r0.deg = 4;
+    fp_poly_set_zero(&t0);
+
+    // r1 = X を多項式基底に変換 (γ^4 = -(1 + γ + γ^2 + γ^3) を代入)
+    //   X = x0*γ + x1*γ^2 + x2*γ^4 + x3*γ^3
+    //     = -x2 + (x0 - x2)γ + (x1 - x2)γ^2 + (x3 - x2)γ^3
+    fp_poly_set_zero(&r1);
+    fp_neg(&r1.c[0], &X->x2);
+    fp_sub(&r1.c[1], &X->x0, &X->x2);
+    fp_sub(&r1.c[2], &X->x1, &X->x2);
+    fp_sub(&r1.c[3], &X->x3, &X->x2);
+    r1.deg = 3;
+    fp_poly_normalize(&r1);
+
+    // t1 = 1
+    fp_poly_set_zero(&t1);
+    fp_set_ui(&t1.c[0], 1);
+    t1.deg = 0;
+
+    // r1 が定数になるまで繰り返す (Φ5 は既約なので gcd は非零定数)
+    while (r1.deg > 0) {
+        // r0 = q * r1 + (余り) の割り算を 1 項ずつ行い、同時に t0 = t0 - q * t1 を計算
+        fp_inv(&lc_inv, &r1.c[r1.deg]);
+        while (r0.deg >= r1.deg) {
+            int k = r0.deg - r1.deg;
+            // 商の γ^k の係数 q = (r0 の最高次係数) / (r1 の最高次係数)
+            fp_mul(&q, &r0.c[r0.deg], &lc_inv);
+            // r0 = r0 - q * γ^k * r1
+            for (int i = 0; i <= r1.deg; i++) {
+                fp_mul(&tmp, &q, &r1.c[i]);
+                fp_sub(&r0.c[i + k], &r0.c[i + k], &tmp);
+            }
+            // t0 = t0 - q * γ^k * t1
+            for (int i = 0; i <= t1.deg; i++) {
+                fp_mul(&tmp, &q, &t1.c[i]);
+                fp_sub(&t0.c[i + k], &t0.c[i + k], &tmp);
+            }
+            if (t1.deg + k > t0.deg) t0.deg = t1.deg + k;
+            fp_poly_normalize(&r0);
+            fp_poly_normalize(&t0);
+        }
+        // (r0, r1) <- (r1, 余り), (t0, t1) <- (t1, t0 - q * t1)
+        swap = r0; r0 = r1; r1 = swap;
+        swap = t0; t0 = t1; t1 = swap;
+    }
+
+    // t1 * X ≡ g (定数 r1.c[0]) なので T = t1 / g (次数 3 以下)
+    fp_t c[4];
+    fp_inv(&lc_inv, &r1.c[0]);
+    for (int i = 0; i < 4; i++) fp_mul(&c[i], &t1.c[i], &lc_inv);
+
+    // 基底 {γ, γ^2, γ^4, γ^3} に戻す (1 = -(γ + γ^2 + γ^3 + γ^4) を代入)
+    //   T = c0 + c1γ + c2γ^2 + c3γ^3
+    //     = (c1 - c0)γ + (c2 - c0)γ^2 - c0γ^4 + (c3 - c0)γ^3
+    fp_sub(&S->x0, &c[1], &c[0]);
+    fp_sub(&S->x1, &c[2], &c[0]);
+    fp_neg(&S->x2, &c[0]);
+    fp_sub(&S->x3, &c[3], &c[0]);
 }
 
 // mpz の _ui 系関数は unsigned long を取る(Windows では 32bit, Linux でも 64bit)ため、

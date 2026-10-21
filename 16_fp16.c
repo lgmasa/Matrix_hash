@@ -621,3 +621,304 @@ void fp16_inv_naive_check(size_t n_bits){
     mpz_clear(p);
     mpz_clear(e);
 }
+
+// ---- xgcd 用: F_{p^4}[y] の多項式 (次数 4 以下, c[i] が y^i の係数) ----
+typedef struct{
+    fp4_t c[5];
+    int deg; // 零多項式は -1
+} fp4_poly_t;
+
+static void fp4_poly_set_zero(fp4_poly_t *P){
+    for (int i = 0; i < 5; i++) fp4_set_zero(&P->c[i]);
+    P->deg = -1;
+}
+
+// 最高次の係数が 0 なら次数を下げる
+static void fp4_poly_normalize(fp4_poly_t *P){
+    while (P->deg >= 0 && fp4_is_zero(&P->c[P->deg])) P->deg--;
+}
+
+// 逆元 S = 1/X (拡張ユークリッド互除法)
+// F_{p^16} = F_{p^4}[y]/(y^4 - α) なので、X(y) と M(y) = y^4 - α に互除法を適用し
+//   T(y) * X(y) + U(y) * M(y) = g   (g は F_{p^4} の非零定数)
+// を満たす T を求めて S = T / g とする。
+// 各段で t_i * X ≡ r_i (mod M) が保たれるので、U は追跡しない。
+// 係数の逆元は愚直法 fp4_inv_naive (X^(p^4-2) を fp4_pow で計算)、
+// 係数の積は naive 法の fp4_mul_slow を使う。
+void fp16_inv_xgcd(fp16_t *S, const fp16_t *X){
+    if (fp16_is_zero(X)) {
+        // 0の逆元はないので 0 を返す
+        fp16_set_zero(S);
+        return;
+    }
+
+    fp4_poly_t r0, r1, t0, t1, swap;
+    fp4_t lc_inv, q, tmp;
+
+    // r0 = M = y^4 - α, t0 = 0
+    fp4_poly_set_zero(&r0);
+    fp4_neg(&r0.c[0], &alpha);
+    fp4_set_ui(&r0.c[4], 1);
+    r0.deg = 4;
+    fp4_poly_set_zero(&t0);
+
+    // r1 = X, t1 = 1
+    fp4_poly_set_zero(&r1);
+    fp4_set(&r1.c[0], &X->x0);
+    fp4_set(&r1.c[1], &X->x1);
+    fp4_set(&r1.c[2], &X->x2);
+    fp4_set(&r1.c[3], &X->x3);
+    r1.deg = 3;
+    fp4_poly_normalize(&r1);
+    fp4_poly_set_zero(&t1);
+    fp4_set_ui(&t1.c[0], 1);
+    t1.deg = 0;
+
+    // r1 が定数になるまで繰り返す (M は既約なので gcd は非零定数)
+    while (r1.deg > 0) {
+        // r0 = q * r1 + (余り) の割り算を 1 項ずつ行い、同時に t0 = t0 - q * t1 を計算
+        fp4_inv_xgcd(&lc_inv, &r1.c[r1.deg]);
+        while (r0.deg >= r1.deg) {
+            int k = r0.deg - r1.deg;
+            // 商の y^k の係数 q = (r0 の最高次係数) / (r1 の最高次係数)
+            fp4_mul_slow(&q, &r0.c[r0.deg], &lc_inv);
+            // r0 = r0 - q * y^k * r1
+            for (int i = 0; i <= r1.deg; i++) {
+                fp4_mul_slow(&tmp, &q, &r1.c[i]);
+                fp4_sub(&r0.c[i + k], &r0.c[i + k], &tmp);
+            }
+            // t0 = t0 - q * y^k * t1
+            for (int i = 0; i <= t1.deg; i++) {
+                fp4_mul_slow(&tmp, &q, &t1.c[i]);
+                fp4_sub(&t0.c[i + k], &t0.c[i + k], &tmp);
+            }
+            if (t1.deg + k > t0.deg) t0.deg = t1.deg + k;
+            fp4_poly_normalize(&r0);
+            fp4_poly_normalize(&t0);
+        }
+        // (r0, r1) <- (r1, 余り), (t0, t1) <- (t1, t0 - q * t1)
+        swap = r0; r0 = r1; r1 = swap;
+        swap = t0; t0 = t1; t1 = swap;
+    }
+
+    // t1 * X ≡ g (定数 r1.c[0]) なので S = t1 / g
+    // t1 の次数は 3 以下 (deg t_i = 4 - deg r_{i-1})
+    fp4_inv_xgcd(&lc_inv, &r1.c[0]);
+    fp4_mul_slow(&S->x0, &t1.c[0], &lc_inv);
+    fp4_mul_slow(&S->x1, &t1.c[1], &lc_inv);
+    fp4_mul_slow(&S->x2, &t1.c[2], &lc_inv);
+    fp4_mul_slow(&S->x3, &t1.c[3], &lc_inv);
+}
+
+/* xgcd 法の逆元 fp16_inv_xgcd (係数の逆元は愚直法 fp4_inv_naive) を検証し、素体乗算の回数を数える。
+ *   1) fp4_inv_naive, fp16_inv_xgcd で X * X^(-1) == 1 となり、既存の逆元 (fp4_inv, fp16_inv) と一致するか
+ *   2) 次数の低い元 (互除法が途中で終わる場合) や 0 でも正しいか
+ *   3) fp16_inv_xgcd 1 回あたりの fp_mul, fp4_mul_slow, fp4_inv_naive (内部の fp4_mul) の回数 (平均・最小・最大)
+ * を表示する。
+ * n_bits は素数を選ぶための出力ビット長(64 -> 2^7-1, 256 -> 2^31-1, 1016 -> 2^127-1) */
+void fp16_inv_xgcd_check(size_t n_bits, int trials){
+    if (!field_select_for_output(n_bits)) {
+        printf("素数の選択に失敗しました (n_bits = %zu)\n", n_bits);
+        return;
+    }
+
+    // ---- F_{p^4}: 愚直法 X^(p^4-2) ----
+    fp4_t one4;
+    fp4_set_ui(&one4, 1);
+    int ok_fp4 = 1;
+    uint64_t mul_fp4inv = 0, slow_fp4inv = 0;
+    for (int t = 0; t < trials; t++) {
+        fp4_t a, b, c, prod;
+        do { fp4_random(&a); } while (fp4_is_zero(&a));
+        uint64_t m0 = fp_mul_count, s0 = fp4_mul_slow_count;
+        fp4_inv_naive(&b, &a);
+        mul_fp4inv  += fp_mul_count - m0;
+        slow_fp4inv += fp4_mul_slow_count - s0;
+        fp4_inv(&c, &a);
+        fp4_mul_slow(&prod, &a, &b);
+        if (!fp4_is_equal(&b, &c) || !fp4_is_equal(&prod, &one4)) ok_fp4 = 0;
+    }
+    fp4_t z4, iz4;
+    fp4_set_zero(&z4);
+    fp4_inv_naive(&iz4, &z4);
+    int ok_fp4_zero = fp4_is_zero(&iz4);
+
+    // ---- F_{p^16} ----
+    fp16_t X, Y, Z, one;
+    fp16_set_zero(&one);
+    fp4_set_ui(&one.x0, 1);
+
+    int ok_one = 1, ok_inv = 1;
+    uint64_t sum_mul = 0, sum_fp4mul_slow = 0, sum_fp4inv = 0, sum_fp4mul = 0;
+    uint64_t min_mul = UINT64_MAX, max_mul = 0;
+    uint64_t mul_ita = 0;
+
+    for (int t = 0; t < trials; t++) {
+        do { fp16_random(&X); } while (fp16_is_zero(&X));
+
+        uint64_t m0 = fp_mul_count, s0 = fp4_mul_slow_count;
+        uint64_t i0 = fp4_inv_naive_count, f0 = fp4_mul_count;
+        fp16_inv_xgcd(&Y, &X);
+        uint64_t m = fp_mul_count - m0;
+        sum_mul         += m;
+        sum_fp4mul_slow += fp4_mul_slow_count - s0;
+        sum_fp4inv      += fp4_inv_naive_count - i0;
+        sum_fp4mul      += fp4_mul_count - f0;
+        if (m < min_mul) min_mul = m;
+        if (m > max_mul) max_mul = m;
+
+        m0 = fp_mul_count;
+        fp16_inv(&Z, &X);
+        mul_ita += fp_mul_count - m0;
+
+        if (!fp16_is_equal(&Y, &Z)) ok_inv = 0;
+        fp16_mul(&Z, &X, &Y);
+        if (!fp16_is_equal(&Z, &one)) ok_one = 0;
+    }
+
+    // 次数の低い元: 互除法が途中で終わる分岐の確認
+    int ok_low = 1;
+    for (int t = 0; t < trials; t++) {
+        fp16_set_zero(&X);
+        int shape = t % 3;
+        do { fp4_random(&X.x0); } while (fp4_is_zero(&X.x0));
+        if (shape == 1) fp4_random(&X.x1);        // x0 + x1*y
+        if (shape == 2) fp4_random(&X.x2);        // x0 + x2*y^2
+        fp16_inv_xgcd(&Y, &X);
+        fp16_inv(&Z, &X);
+        if (!fp16_is_equal(&Y, &Z)) ok_low = 0;
+        fp16_mul(&Z, &X, &Y);
+        if (!fp16_is_equal(&Z, &one)) ok_low = 0;
+    }
+
+    // 0 の場合は 0 を返す
+    fp16_set_zero(&X);
+    fp16_inv_xgcd(&Y, &X);
+    int ok_zero = fp16_is_zero(&Y);
+
+    printf("== xgcd 法での逆元, p = 2^%u - 1 (%d 回) ==\n", FP_BITS, trials);
+    printf("  [F_p^4]  fp4_inv_naive が fp4_inv と一致, X * X^(-1) == 1 : %s\n", ok_fp4 ? "OK" : "NG");
+    printf("  [F_p^4]  fp4_inv_naive は 0 に対して 0 を返す            : %s\n", ok_fp4_zero ? "OK" : "NG");
+    printf("  [F_p^16] fp16_inv と一致                   : %s\n", ok_inv ? "OK" : "NG");
+    printf("  [F_p^16] X * X^(-1) == 1                   : %s\n", ok_one ? "OK" : "NG");
+    printf("  [F_p^16] 次数の低い元でも正しい            : %s\n", ok_low ? "OK" : "NG");
+    printf("  [F_p^16] 0 に対して 0 を返す               : %s\n", ok_zero ? "OK" : "NG");
+    printf("  fp16_inv_xgcd 1 回あたり (ランダムな元, 平均)\n");
+    printf("    素体乗算 fp_mul         : %.2f 回 (最小 %llu, 最大 %llu)\n",
+           (double)sum_mul / trials, (unsigned long long)min_mul, (unsigned long long)max_mul);
+    printf("    fp4_mul_slow (naive)    : %.2f 回 (互除法本体 + fp4_inv_naive 内部)\n", (double)sum_fp4mul_slow / trials);
+    printf("    fp4_inv_naive           : %.2f 回 (1 回あたり fp4_mul_slow %.2f 回, fp_mul %.2f 回)\n",
+           (double)sum_fp4inv / trials, (double)slow_fp4inv / trials, (double)mul_fp4inv / trials);
+    printf("    fp4_mul (CVMA)          : %.2f 回\n", (double)sum_fp4mul / trials);
+    printf("    (参考) fp16_inv の fp_mul : %.2f 回\n\n", (double)mul_ita / trials);
+}
+
+// ---- 演算回数の計測用 ----
+typedef struct{
+    double mul, add, sub; // 素体の乗算・加算・減算
+    double fpinv, div;    // fp_inv_xgcd の呼び出し回数, その中の整数除算の回数
+    double inv;           // fp_inv (p-2 乗) の呼び出し回数 (中の乗算は mul に含まれる)
+} opcount_t;
+
+static void opcount_snap(opcount_t *c){
+    c->mul = fp_mul_count;  c->add = fp_add_count;  c->sub = fp_sub_count;
+    c->fpinv = fp_inv_xgcd_count;  c->div = fp_xgcd_div_count;
+    c->inv = fp_inv_count;
+}
+
+// acc += (after - before)
+static void opcount_acc(opcount_t *acc, const opcount_t *before, const opcount_t *after){
+    acc->mul   += after->mul   - before->mul;
+    acc->add   += after->add   - before->add;
+    acc->sub   += after->sub   - before->sub;
+    acc->fpinv += after->fpinv - before->fpinv;
+    acc->div   += after->div   - before->div;
+    acc->inv   += after->inv   - before->inv;
+}
+
+static void opcount_print(const char *name, const opcount_t *c, int n){
+    printf("  %-30s mul %8.2f  add %8.2f  sub %8.2f  (add+sub %8.2f, 合計 %8.2f)",
+           name, c->mul / n, c->add / n, c->sub / n,
+           (c->add + c->sub) / n, (c->mul + c->add + c->sub) / n);
+    if (c->inv > 0)   printf("  fp_inv %.2f 回", c->inv / n);
+    if (c->fpinv > 0) printf("  fp_inv_xgcd %.2f 回 (整数除算 %.2f 回)", c->fpinv / n, c->div / n);
+    printf("\n");
+}
+
+/* 逆元計算 1 回あたりの素体演算 (fp_mul, fp_add, fp_sub) の回数を、ランダムな元 trials 個の平均で表示する。
+ *   - F_{p^16}: fp16_inv_xgcd (xgcd) と fp16_inv (ITA)
+ *   - 部品: F_{p^4}, F_p の各逆元と fp4 の乗算
+ *   - fp16_inv_xgcd の互除法本体 (全体から、中で呼ばれた F_{p^4} の逆元の分を引いたもの)
+ * fp_inv (p-2 乗) の中の乗算は mul に含め、呼び出し回数も別に表示する。
+ * fp_neg と、fp_inv_xgcd 内の整数演算 (除算・乗算・加減算) はカウントしない。
+ * n_bits は素数を選ぶための出力ビット長(64 -> 2^7-1, 256 -> 2^31-1, 1016 -> 2^127-1) */
+void fp16_inv_opcount_check(size_t n_bits, int trials){
+    if (!field_select_for_output(n_bits)) {
+        printf("素数の選択に失敗しました (n_bits = %zu)\n", n_bits);
+        return;
+    }
+
+    opcount_t b, a;
+    opcount_t c_fp16_xgcd = {0}, c_fp16_ita = {0};
+    opcount_t c_fp4_ita = {0}, c_fp4_xgcd = {0}, c_fp4_naive = {0};
+    opcount_t c_fp4_mul_slow = {0}, c_fp4_mul = {0};
+    opcount_t c_fp_pow = {0}, c_fp_xgcd = {0};
+    // fp16_inv_xgcd の中で呼ばれた F_{p^4} の逆元の回数 (種類別)
+    uint64_t n_ita = 0, n_xgcd = 0, n_naive = 0;
+
+    for (int t = 0; t < trials; t++) {
+        // F_{p^16}
+        fp16_t X, Y;
+        do { fp16_random(&X); } while (fp16_is_zero(&X));
+        uint64_t i0 = fp4_inv_count, x0 = fp4_inv_xgcd_count, v0 = fp4_inv_naive_count;
+        opcount_snap(&b); fp16_inv_xgcd(&Y, &X); opcount_snap(&a); opcount_acc(&c_fp16_xgcd, &b, &a);
+        n_ita   += fp4_inv_count       - i0;
+        n_xgcd  += fp4_inv_xgcd_count  - x0;
+        n_naive += fp4_inv_naive_count - v0;
+        opcount_snap(&b); fp16_inv(&Y, &X);      opcount_snap(&a); opcount_acc(&c_fp16_ita, &b, &a);
+
+        // F_{p^4}
+        fp4_t x4, y4, z4;
+        do { fp4_random(&x4); } while (fp4_is_zero(&x4));
+        fp4_random(&z4);
+        opcount_snap(&b); fp4_inv(&y4, &x4);          opcount_snap(&a); opcount_acc(&c_fp4_ita, &b, &a);
+        opcount_snap(&b); fp4_inv_xgcd(&y4, &x4);     opcount_snap(&a); opcount_acc(&c_fp4_xgcd, &b, &a);
+        opcount_snap(&b); fp4_inv_naive(&y4, &x4);    opcount_snap(&a); opcount_acc(&c_fp4_naive, &b, &a);
+        opcount_snap(&b); fp4_mul_slow(&y4, &x4, &z4); opcount_snap(&a); opcount_acc(&c_fp4_mul_slow, &b, &a);
+        opcount_snap(&b); fp4_mul(&y4, &x4, &z4);     opcount_snap(&a); opcount_acc(&c_fp4_mul, &b, &a);
+
+        // F_p
+        fp_t x1, y1;
+        do { fp_random(&x1); } while (fp_is_zero(&x1));
+        opcount_snap(&b); fp_inv(&y1, &x1);      opcount_snap(&a); opcount_acc(&c_fp_pow, &b, &a);
+        opcount_snap(&b); fp_inv_xgcd(&y1, &x1); opcount_snap(&a); opcount_acc(&c_fp_xgcd, &b, &a);
+    }
+
+    // 互除法本体 = fp16_inv_xgcd 全体 - (中で呼ばれた F_{p^4} の逆元の回数 x それぞれの 1 回あたりの演算回数)
+    // (1 回あたりの演算回数は上で単独に測った平均を使う)
+    double r_ita = (double)n_ita / trials, r_xgcd = (double)n_xgcd / trials, r_naive = (double)n_naive / trials;
+    opcount_t body = {
+        c_fp16_xgcd.mul - (r_ita * c_fp4_ita.mul + r_xgcd * c_fp4_xgcd.mul + r_naive * c_fp4_naive.mul),
+        c_fp16_xgcd.add - (r_ita * c_fp4_ita.add + r_xgcd * c_fp4_xgcd.add + r_naive * c_fp4_naive.add),
+        c_fp16_xgcd.sub - (r_ita * c_fp4_ita.sub + r_xgcd * c_fp4_xgcd.sub + r_naive * c_fp4_naive.sub),
+        0, 0, 0
+    };
+
+    printf("== 逆元計算 1 回あたりの素体演算回数, p = 2^%u - 1 (%d 回平均) ==\n", FP_BITS, trials);
+    printf(" [F_p^16]\n");
+    opcount_print("fp16_inv_xgcd (xgcd)", &c_fp16_xgcd, trials);
+    opcount_print("fp16_inv (ITA)", &c_fp16_ita, trials);
+    opcount_print("  うち xgcd の互除法本体", &body, trials);
+    printf("    (fp16_inv_xgcd 内の F_p^4 逆元: fp4_inv %.2f 回, fp4_inv_xgcd %.2f 回, fp4_inv_naive %.2f 回)\n",
+           r_ita, r_xgcd, r_naive);
+    printf(" [F_p^4]\n");
+    opcount_print("fp4_inv (ITA)", &c_fp4_ita, trials);
+    opcount_print("fp4_inv_xgcd", &c_fp4_xgcd, trials);
+    opcount_print("fp4_inv_naive (X^(p^4-2))", &c_fp4_naive, trials);
+    opcount_print("fp4_mul_slow (naive)", &c_fp4_mul_slow, trials);
+    opcount_print("fp4_mul (CVMA)", &c_fp4_mul, trials);
+    printf(" [F_p]\n");
+    opcount_print("fp_inv (X^(p-2))", &c_fp_pow, trials);
+    opcount_print("fp_inv_xgcd", &c_fp_xgcd, trials);
+    printf("  ※ fp_inv (p-2 乗) の中の乗算は mul に含む。fp_neg と fp_inv_xgcd 内の整数演算はカウントしない\n\n");
+}
